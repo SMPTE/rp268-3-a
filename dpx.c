@@ -353,7 +353,7 @@ int write_dpx_ver(char *fname, pic_t *p, int ar1, int ar2, int frameno, int seql
 	if (p->color == RGB)
 	{
 		nbuffer = 1;
-		if(swaprb)
+		if(swaprb & 1)
 		{
 			datum[0][0] = p->data.rgb.r;
 			datum[0][1] = p->data.rgb.g;
@@ -406,6 +406,12 @@ int write_dpx_ver(char *fname, pic_t *p, int ar1, int ar2, int frameno, int seql
 		datum[0][0] = p->data.yuv.u;
 		datum[0][1] = p->data.yuv.y;
 		datum[0][2] = p->data.yuv.v;
+		if (swaprb & 2)  
+		{
+			datum[0][0] = p->data.yuv.v;
+			datum[0][1] = p->data.yuv.y;
+			datum[0][2] = p->data.yuv.u;
+		}
 		if (p->alpha == 0)
 		{
 			ndatum[0] = 3;
@@ -684,7 +690,8 @@ int dpx_read_hl(char *fname, pic_t **p, int* highdata, int*lowdata, int pad_ends
 	h = READ_DPX_32(f.ImageHeader.LinesPerElement);
 	*p = NULL;
 
- 	if(strstr(f.FileHeader.Copyright, "Broadcom") != NULL)
+ 	//if(strstr(f.FileHeader.Copyright, "Broadcom") != NULL)
+	if(0)
 	{
 		data_bswap = bswap;  // Follow the spec
 		datum_order = 0;
@@ -916,7 +923,7 @@ static int read_dpx_image_data(FILE *fp, pic_t **p, int orientation, int sign, i
 			return(DPX_ERROR_MISMATCH);
 		}
 		ncomponents[0] = 3;
-		if(swap_r_and_b)
+		if(swap_r_and_b & 1)
 		{
 			ptr[0][0] = (*p)->data.rgb.r;
 			ptr[0][1] = (*p)->data.rgb.g;
@@ -936,7 +943,7 @@ static int read_dpx_image_data(FILE *fp, pic_t **p, int orientation, int sign, i
 		}
 		(*p)->alpha = 1;
 		ncomponents[0] = 4;
-		if(swap_r_and_b)
+		if(swap_r_and_b & 1)
 		{
 			ptr[0][0] = (*p)->data.rgb.r;
 			ptr[0][1] = (*p)->data.rgb.g;
@@ -1007,9 +1014,17 @@ static int read_dpx_image_data(FILE *fp, pic_t **p, int orientation, int sign, i
 			return(DPX_ERROR_MISMATCH);
 		}
 		ncomponents[0] = 3;
+		if (swap_r_and_b & 2)
+		{
+			ptr[0][0] = (*p)->data.yuv.v;
+			ptr[0][1] = (*p)->data.yuv.y;
+			ptr[0][2] = (*p)->data.yuv.u;
+		}
+		else {
 		ptr[0][0] = (*p)->data.yuv.u;
 		ptr[0][1] = (*p)->data.yuv.y;
 		ptr[0][2] = (*p)->data.yuv.v;
+		}
 		wbuff[0] = w;
 		hbuff[0] = h;
 		break;

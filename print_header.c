@@ -51,10 +51,12 @@ void print_hdrdpx_header(FILE *fp, char *fname, HDRDPXFILEFORMAT *dpx_file, HDRD
 {
 	int i;
 
+	fprintf(fp, "\n\n//////////////////////////////////////////////////////////////////\n");
 	fprintf(fp, "// File information header for %s\n", fname);
-	PRINT_RO_FIELD_U32_HEX(1, "Magic", dpx_file->FileHeader.Magic);
+	fprintf(fp, "//////////////////////////////////////////////////////////////////\n");
+	PRINT_RO_FIELD_U32_HEX(1, "// Magic", dpx_file->FileHeader.Magic);
 	PRINT_FIELD_U32(1, "Image_Offset", dpx_file->FileHeader.ImageOffset);
-	PRINT_FIELD_ASCII(1, "Version", dpx_file->FileHeader.Version, 8);
+	PRINT_FIELD_ASCII(1, "// Version", dpx_file->FileHeader.Version, 8);
 	PRINT_RO_FIELD_U32(1, "File_Size", dpx_file->FileHeader.FileSize);
 	PRINT_FIELD_U32(0, "Ditto_Key", dpx_file->FileHeader.DittoKey);
 	PRINT_RO_FIELD_U32(0, "Generic_Size", dpx_file->FileHeader.GenericSize);

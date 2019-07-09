@@ -3,41 +3,36 @@ GCCVER =
 #CC = g++
 DEFINES =
 #JFLAGS = -std=c99 -g -Wall
-JFLAGS = -std=c99 -O3 -Wall
+JFLAGS = -std=c99 -D_GNU_SOURCE -O3 -Wall
 
 # =================================================================================
 
-dsc_DEFS = \
-	dsc_codec.h \
-	dsc_types.h \
-	dsc_utils.h \
+conv_format_DEFS = \
 	cmd_parse.h \
 	dpx.h \
+	hdr_dpx.h \
 	fifo.h \
 	logging.h \
-	multiplex.h \
 	psnr.h \
 	utl.h \
-	vdo.h \
+	vdo.h
 
-dsc_SRCS = \
-	dsc_codec.c \
-	dsc_utils.c \
+conv_format_SRCS = \
 	cmd_parse.c \
-	codec_main.c \
+	conv_main.c \
 	dpx.c \
+	hdr_dpx.c \
 	fifo.c \
 	logging.c \
-	multiplex.c \
-	psnr.c \
+	print_header.c \
 	utl.c
 
-dsc_OBJS = ${dsc_SRCS:.c=.o}
+conv_format_OBJS = ${conv_format_SRCS:.c=.o}
 
 # ----------------------------------------------------------------
 
-dsc: $(dsc_OBJS)
-	$(CC) $(dsc_OBJS) -lm -o dsc
+conv_format: $(conv_format_OBJS)
+	$(CC) $(conv_format_OBJS) -lm -o conv_format
 
 # ----------------------------------------------------------------
 .c.o:
@@ -46,11 +41,12 @@ dsc: $(dsc_OBJS)
 .c.ln:
 	lint -c $*.c 
 
-% : %.c vdo.h utl.c utl.h dpx.h
-	gcc -O -o $@ $@.c utl.c dpx.c -lm -W -Wall -std=c99
+% : %.c vdo.h utl_brcm.c utl.h dpx.h
+	gcc -O -o $@ $@.c utl_brcm.c dpx.c -lm -W -Wall -std=c99
 
-all: dsc
+all: conv_format
 
 clean:
 	rm -f *.o
-	rm -f dsc
+	rm -f conv_format
+

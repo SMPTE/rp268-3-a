@@ -1878,20 +1878,6 @@ int hdr_dpx_write(char *fname, pic_t *p, HDRDPXFILEFORMAT *dpxh, HDRDPXUSERDATA 
 			fputc(dpxsbm->SbmData[i], fp);
 	}
 
-	// Write file header
-	fseek(fp, SEEK_END, 0);
-	f.FileHeader.FileSize = (unsigned int)ftell(fp);
-
-	fseek(fp, 0, SEEK_SET);
-	memcpy(&f_bs, &f, sizeof(HDRDPXFILEFORMAT));
-	if (bswap)
-		hdr_dpx_byte_swap(&f_bs);
-	fwrite(&f_bs, sizeof(HDRDPXFILEFORMAT), 1, fp);
-	
-	// Output header
-	if(dpxh_written != NULL)
-		memcpy(dpxh_written, &f, sizeof(HDRDPXFILEFORMAT)); // Pass back calculated header values if desired
-
 	// Write user data section
 	if (f.FileHeader.UserSize > 0)
 	{
@@ -1909,6 +1895,19 @@ int hdr_dpx_write(char *fname, pic_t *p, HDRDPXFILEFORMAT *dpxh, HDRDPXUSERDATA 
 			fputc(dpxu->UserData[i], fp);
 	}
 
+	// Write file header
+	fseek(fp, 0, SEEK_END);
+	f.FileHeader.FileSize = (unsigned int)ftell(fp);
+
+	fseek(fp, 0, SEEK_SET);
+	memcpy(&f_bs, &f, sizeof(HDRDPXFILEFORMAT));
+	if (bswap)
+		hdr_dpx_byte_swap(&f_bs);
+	fwrite(&f_bs, sizeof(HDRDPXFILEFORMAT), 1, fp);
+
+	// Output header
+	if (dpxh_written != NULL)
+		memcpy(dpxh_written, &f, sizeof(HDRDPXFILEFORMAT)); // Pass back calculated header values if desired
 
 	fifo_free(&fifo);
 	for (e = 0; e < f.ImageHeader.NumberElements; e++) 

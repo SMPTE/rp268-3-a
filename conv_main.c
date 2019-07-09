@@ -68,6 +68,8 @@ static int bitsPerComponent;
 static int function;
 static int rbSwap;
 static int rbSwapOut;
+static int cbcrSwap;
+static int cbcrSwapOut;
 static int picWidth;
 static int picHeight;
 static int dpxRForceBe;
@@ -77,6 +79,7 @@ static int dpxWPadEnds;
 static int dpxWDatumOrder;
 static int dpxWForcePacking;
 static int dpxWByteSwap;
+static int hdrdpxWriteAsBe;
 static int ppmFileOutput;
 static int dpxFileOutput;
 static int hdrDpxFileOutput;
@@ -370,6 +373,8 @@ static  cmdarg_t cmd_args[] = {
 	{ PARG,  &deleteAlpha,        "DELETE_ALPHA",         "-delalp", 0, 0 },  // Delete alpha plane
 	{ PARG,  &rbSwap,             "SWAP_R_AND_B",         "-rbswp", 0,  0},  // Swap red & blue components
 	{ PARG,  &rbSwapOut,          "SWAP_R_AND_B_OUT",     "-rbswpo", 0,  0},  // Swap red & blue components
+	{ PARG,  &cbcrSwap,           "SWAP_CB_AND_CR",       "-cbcrswp", 0,  0 },  // Swap Cb & Cr components for 4:4:4
+	{ PARG,  &cbcrSwapOut,        "SWAP_CB_AND_CR_OUT",   "-cbcrswpo", 0,  0 },  // Swap Cb & Cr components for 4:4:4
 	{ PARG,  &function,           "FUNCTION",             "-do",    0,  0},   // 0=convert, 1=read only (for dumping headers)
 	{ PARG,  &dpxRForceBe,        "DPXR_FORCE_BE",        "-dpxrfbe", 0, 0},  // Force big-endian DPX read
 	{ PARG,  &dpxRPadEnds,        "DPXR_PAD_ENDS",        "-dpxrpad",  0, 0},  // Pad line ends for DPX input
@@ -378,6 +383,7 @@ static  cmdarg_t cmd_args[] = {
 	{ PARG,  &dpxWDatumOrder,     "DPXW_DATUM_ORDER",     "-dpxwdo",  0, 0},   // DPX output datum order
 	{ PARG,  &dpxWForcePacking,   "DPXW_FORCE_PACKING",   "-dpxwfp",  0, 0},   // DPX output force packing method
 	{ PARG,  &dpxWByteSwap,       "DPXW_BYTE_SWAP",       "-dpxwbs",  0, 0},   // DPX output write in LE order
+	{ PARG,  &hdrdpxWriteAsBe,    "HDRDPX_WRITE_AS_BE",   "-hdpxwbe",  0, 0 },   // 0 = write HDR DPX in LE order, 1 = write HDR DPX in BE order
 	{ PARG,  &picWidth,           "PIC_WIDTH",            "-pw",  0,  0},    // picture width for YUV input
 	{ PARG,  &picHeight,          "PIC_HEIGHT",           "-ph",  0,  0},    // picture height for YUV input
 	{ PARG,  &ppmFileOutput,      "PPM_FILE_OUTPUT",      "-ppm",  0,  0},    // output PPM files
@@ -415,6 +421,8 @@ void set_defaults(void)
 	useYuvInput = 0;
 	rbSwap = 0;
 	rbSwapOut = 0;
+	cbcrSwap = 0;
+	cbcrSwapOut = 0;
 	function = 0;
 	ppmFileOutput = 0;
 	yuvFileOutput = 0;
@@ -434,6 +442,7 @@ void set_defaults(void)
 	bitsPerComponent = UINT8_MAX;
 	createAlpha = 0;
 	deleteAlpha = 0;
+	hdrdpxWriteAsBe = 1;   // Write as big-endian by default
 
 	picWidth = 1920;  // Default for YUV input
 	picHeight = 1080;  
@@ -1301,7 +1310,7 @@ int main(int argc, char *argv[])
 				UErr("hdr_dpx_determine_file_type failed\n");
 			if (type == 1 || type == 2)
 			{
-				if (dpx_read(infname, &ip, dpxRPadEnds, dpxRForceBe, dpxRDatumOrder, rbSwap))
+				if (dpx_read(infname, &ip, dpxRPadEnds, dpxRForceBe, dpxRDatumOrder, rbSwap | (cbcrSwap << 1)))
 				{
 					fprintf(stderr, "Error read DPX file %s\n", infname);
 					exit(1);
@@ -1522,7 +1531,7 @@ int main(int argc, char *argv[])
 				if (multiFrameYuvFile || frameNumber > 0)
 					strcat(f, frmnumstr);
 				strcat(f, ".dpx");
-				if (dpx_write(f, op, dpxWPadEnds, dpxWDatumOrder, dpxWForcePacking, rbSwapOut, dpxWByteSwap))
+				if (dpx_write(f, op, dpxWPadEnds, dpxWDatumOrder, dpxWForcePacking, rbSwapOut | (cbcrSwapOut << 1), dpxWByteSwap))
 				{
 					fprintf(stderr, "Error writing DPX file %s\n", f);
 					exit(1);
@@ -1541,7 +1550,7 @@ int main(int argc, char *argv[])
 					strcat(f, frmnumstr);
 				strcat(f, ".dpx");
 				populate_hdr_dpx_header(infname, &hdrdpx_f, &hdrdpx_user, &hdrdpx_sbm);
-				if (hdr_dpx_write(f, op, &hdrdpx_f, &hdrdpx_user, &hdrdpx_sbm, dpxWByteSwap, &hdrdpx_f_written))
+				if (hdr_dpx_write(f, op, &hdrdpx_f, &hdrdpx_user, &hdrdpx_sbm, hdrdpxWriteAsBe, &hdrdpx_f_written))
 				{
 					fprintf(stderr, "Error writing DPX file %s\n", f);
 					exit(1);

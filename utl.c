@@ -680,7 +680,7 @@ pic_t *convertbits(pic_t *p, int newbits)
 {
 	int ii, jj, kk;
 	int error = 0;
-	double s[8];
+	double s[10];
 	pic_t *new_p;
 	double scale;
 

@@ -37,6 +37,7 @@
 /*** hdr_dpx.h ***/
 #include "vdo.h"
 
+#ifndef DPX_H
 #define DPX_ERROR_UNRECOGNIZED_CHROMA  -1
 #define DPX_ERROR_UNSUPPORTED_BPP      -2
 #define DPX_ERROR_NOT_IMPLEMENTED      -3
@@ -69,6 +70,7 @@ typedef float SINGLE;
 #endif /* linux */
 #endif /* !sparc */
 #endif /* !win */
+#endif /* DPX_H */
 
 #define NUM_IMAGE_ELEMENTS  8
 
@@ -322,9 +324,9 @@ typedef struct _HdrDpxSbmData
 	uint8_t		*SbmData;			/* Standards-based metadata */
 } HDRDPXSBMDATA;
 
-#define UNDEFINED_U32	(~((DWORD)0))
-#define UNDEFINED_U16   (~((WORD)0))
-#define UNDEFINED_U8    (~((BYTE)0))
+#define UNDEFINED_U32	UINT32_MAX
+#define UNDEFINED_U16   UINT16_MAX
+#define UNDEFINED_U8    UINT8_MAX
 
 
 extern format_t determine_field_format(char* file_name);
