@@ -49,9 +49,21 @@ HdrDpxImageElement::HdrDpxImageElement(uint32_t width, uint32_t height, Dpx::Hdr
 
 HdrDpxImageElement::HdrDpxImageElement(HDRDPXFILEFORMAT header, int ie)
 {
+	Dpx::HdrDpxDescriptor desc;
 	m_bpc = header.ImageHeader.ImageElement[ie].BitSize;
 	ASSERT_MSG((m_bpc == 1) || (m_bpc == 8) || (m_bpc == 10) || (m_bpc == 12) || (m_bpc == 16) || (m_bpc == 32) || (m_bpc == 64), "Read invalid bit depth\n");
-	m_descriptor = static_cast<Dpx::HdrDpxDescriptor>(header.ImageHeader.ImageElement[ie].Descriptor);
+	desc = m_descriptor = static_cast<Dpx::HdrDpxDescriptor>(header.ImageHeader.ImageElement[ie].Descriptor);
+	if (desc == Dpx::eDescCbCr || desc == Dpx::eDescCbYCrY || desc == Dpx::eDescCbYACrYA ||
+		desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
+		desc == Dpx::eDescCYAYA)
+		m_h_subsampled = true;
+	else
+		m_h_subsampled = false;
+	if (desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
+		desc == Dpx::eDescCYAYA)
+		m_v_subsampled = true;
+	else
+		m_v_subsampled = false;
 	m_width = ComputeWidth(header.ImageHeader.PixelsPerLine);
 	m_height = ComputeHeight(header.ImageHeader.LinesPerElement);
 	m_isinitialized = true;
@@ -785,6 +797,8 @@ bool HdrDpxImageElement::IsNextSame(uint32_t xpos, uint32_t ypos)
 	bool same = true;
 	int num_components;
 
+	if (xpos >= m_width - 1)
+		return false;
 	num_components = GetNumberOfComponents();
 
 	if (m_bpc < 32)		// Integer
@@ -848,11 +862,12 @@ Dpx::ErrorObject HdrDpxImageElement::WriteImageData(std::ofstream &outfile, bool
 			}
 			else {
 				run_type = IsNextSame(xpos, ypos);
-				for (run_length = 1; run_length < m_width - xpos && run_length <= max_run; ++run_length)
+				for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
 				{
 					if (IsNextSame(xpos + run_length, ypos) != run_type)
 						break;
 				}
+				run_length++;
 				if (run_type)
 				{
 					WriteDatum(&fifo, 1 | (run_length << 1), outfile);
@@ -959,7 +974,10 @@ float HdrDpxImageElement::GetHeader(Dpx::HdrDpxIEFieldsR32 f)
 
 void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDescriptor d)
 {
-	m_dpx_imageelement.Descriptor = static_cast<uint8_t>(d);
+	if(m_isinitialized)	
+		m_warnings.push_back("SetHeader() call to set descriptor ignored; descriptor cannot be changed after IE is initialized");
+	else
+		m_dpx_imageelement.Descriptor = static_cast<uint8_t>(d);
 }
 
 Dpx::HdrDpxDescriptor HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsDescriptor f)
@@ -989,7 +1007,10 @@ Dpx::HdrDpxColorimetric HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsColorimet
 
 void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDepth d)
 {
-	m_dpx_imageelement.BitSize = static_cast<uint8_t>(d);
+	if(m_isinitialized)
+		m_warnings.push_back("SetHeader() call to set bit depth is ignored; bit depth cannot be changed after IE is initialized");
+	else
+		m_dpx_imageelement.BitSize = static_cast<uint8_t>(d);
 }
 
 Dpx::HdrDpxBitDepth HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsBitDepth f)

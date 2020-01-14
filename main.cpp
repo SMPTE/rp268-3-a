@@ -101,7 +101,7 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
 
-	example_read();
+	example_write();
 
 	release_argn(argc, argn);
 	return(0);
@@ -191,6 +191,7 @@ void example_write()
 	// Create a picture (planes aren't ordered inside this data structure, so this sequence is arbitrary:)
 	//ie.SetHeader(Dpx::eBitDepth, 8);   // this would be invalid!!
 	//ie.SetHeader(Dpx::eDescriptor, Dpx::eDescBGR);  // this would be invalid!!
+	ie->SetHeader(Dpx::eEncoding, Dpx::eEncodingRLE);
 	for (i = 0; i < ie->GetHeight(); i++)
 	{
 		for (j = 0; j < ie->GetWidth(); j++)

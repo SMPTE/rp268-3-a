@@ -1,6 +1,7 @@
 #include <string>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 #include "hdr_dpx.h"
 
 extern "C"
@@ -510,21 +511,17 @@ Dpx::ErrorObject HdrDpxFile::WriteFile(std::string fname)
 }
 
 
-template < typename T >
-std::string int_to_hex(T i)
+static std::string u32_to_hex(uint32_t v)
 {
-/*	std::stringstream stream;
-	stream << "0x"
-		<< std::setfill('0') << std::setw(sizeof(T) * 2)
-		<< std::hex << i;
-	return stream.str(); */
-	return std::to_string(i);  // need to adjust
+	std::stringstream s;
+	s << "0x" << std::setfill('0') << std::setw(8) << std::hex << v;
+	return s.str();
 }
 
 #define PRINT_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + std::to_string(v) + "\n"; }
-#define PRINT_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + int_to_hex(v) + "\n"; }
+#define PRINT_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + u32_to_hex(v) + "\n"; }
 #define PRINT_RO_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += "// " + n + "\t" + std::to_string(v) + "\n"; }
-#define PRINT_RO_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) {  header += "// " + n + "\t" + int_to_hex(v) + "\n";  }
+#define PRINT_RO_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) {  header += "// " + n + "\t" + u32_to_hex(v) + "\n";  }
 #define PRINT_FIELD_U8(n,v) if((v)!=UNDEFINED_U8) {  header += n + "\t" + std::to_string(v) + "\n";  }
 #define PRINT_RO_FIELD_U8(n,v) if((v)!=UNDEFINED_U8) { header += "// " + n + "\t" + std::to_string(v) + "\n"; }
 #define PRINT_FIELD_U16(n,v) if((v)!=UNDEFINED_U16) {  header += n + "\t" + std::to_string(v) + "\n";  }
@@ -541,7 +538,7 @@ string HdrDpxFile::DumpHeader()
 		"// File information header for " + m_file_name + "\n" +
 		"//////////////////////////////////////////////////////////////////\n";
 	
-	PRINT_RO_FIELD_U32_HEX(std::string("// Magic"), static_cast<unsigned int>(m_dpx_header.FileHeader.Magic));
+	PRINT_RO_FIELD_U32_HEX(std::string("Magic"), static_cast<unsigned int>(m_dpx_header.FileHeader.Magic));
 	
 	PRINT_FIELD_U32(std::string("Image_Offset"), m_dpx_header.FileHeader.ImageOffset);
 	PRINT_FIELD_ASCII(std::string("// Version"), m_dpx_header.FileHeader.Version, 8);
