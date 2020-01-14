@@ -152,18 +152,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="cmd_parse.c" />
-    <ClCompile Include="conv_main.c" />
-    <ClCompile Include="fifo.c" />
-    <ClCompile Include="hdr_dpx.c" />
+    <ClCompile Include="fifo.cpp" />
+    <ClCompile Include="hdr_dpx_file.cpp" />
+    <ClCompile Include="hdr_dpx_image_element.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="dpx.c" />
-    <ClCompile Include="logging.c" />
-    <ClCompile Include="print_header.c" />
-    <ClCompile Include="utl.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cmd_parse.h" />
+    <ClInclude Include="datum.h" />
     <ClInclude Include="dpx.h" />
     <ClInclude Include="fifo.h" />
     <ClInclude Include="hdr_dpx.h" />

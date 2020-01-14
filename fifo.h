@@ -36,25 +36,32 @@
 
 #ifndef FIFO_H
 #define FIFO_H
+#include <cstdint>
 
-typedef struct fifo_s
+class Fifo
 {
-	unsigned char *data;
-	int size;
-	int fullness;
-	int read_ptr;
-	int write_ptr;
-	int max_fullness;
-	int byte_ctr;
-} fifo_t;
-
-void fifo_init(fifo_t *fifo, int size);
-void fifo_free(fifo_t *fifo);
-int fifo_get_bits(fifo_t *fifo, int nbits, int sign_extend);
-void fifo_put_bits(fifo_t *fifo, unsigned int d, int nbits);
-void fifo_clone(fifo_t *dst, fifo_t *src);
-int fifo_flip_get_bits(fifo_t *fifo, int nbits, int sign_extend);
-void fifo_flip_put_bits(fifo_t *fifo, unsigned int d, int nbits);
+public:
+	Fifo(int size);
+	~Fifo();
+	uint32_t GetBitsUi(int nbits);
+	int32_t GetBitsI(int nbits);
+	void PutBits(uint32_t d, int nbits);
+	void PutBits(int32_t d, int nbits);
+	uint32_t FlipGetBitsUi(int nbits);
+	int32_t FlipGetBitsI(int nbits);
+	int32_t GetDatum(int nbits, bool is_signed, bool direction_r2l);
+	void FlipPutBits(uint32_t d, int nbits);
+	void FlipPutBits(int32_t d, int nbits);
+	void PutDatum(int32_t datum, int nbits, bool direction_r2l);
+	int m_fullness;
+private:
+	unsigned char *m_data;
+	int m_size;
+	int m_read_ptr;
+	int m_write_ptr;
+	int m_max_fullness;
+	int m_byte_ctr;
+};
 
 #endif
 

@@ -2037,3 +2037,32 @@ int	 hdr_dpx_determine_file_type(char *fname)
 	return(type);
 }
 
+/*!
+************************************************************************
+* \brief
+*    copy_string_n() - Copies a DPX header string and adds null-padding if needed
+*
+* \param dest
+*    Allocated string to copy to
+* \param src
+*    String to copy from
+* \param n
+*    String length
+*
+************************************************************************
+*/
+inline void hdr_dpx_copy_string_n(char *dest, char *src, int n)
+{
+	int i = 0;
+	int term = 0;
+
+	for (i = 0; i<n; ++i)
+	{
+		if (src[i] == '\0')
+			term = 1;
+		if (term)
+			dest[i] = '\0';
+		else
+			dest[i] = src[i];
+	}
+}
