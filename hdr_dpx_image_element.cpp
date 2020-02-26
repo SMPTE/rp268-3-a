@@ -1,3 +1,34 @@
+/***************************************************************************
+*    Copyright (c) 2020, Broadcom Inc.
+*
+*
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted provided that the following conditions are
+*  met:
+*
+*  1. Redistributions of source code must retain the above copyright notice,
+*     this list of conditions and the following disclaimer.
+*
+*  2. Redistributions in binary form must reproduce the above copyright
+*     notice, this list of conditions and the following disclaimer in the
+*     documentation and/or other materials provided with the distribution.
+*
+*  3. Neither the name of the copyright holder nor the names of its
+*     contributors may be used to endorse or promote products derived from
+*     this software without specific prior written permission.
+*
+*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+*  IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+*  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+*  PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+*  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+*  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+*  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+*  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+*  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+*  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+***************************************************************************/
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -19,72 +50,62 @@
 #endif
 
 
-using namespace std;
+using namespace Dpx;
 
-HdrDpxImageElement::HdrDpxImageElement(uint32_t width, uint32_t height, Dpx::HdrDpxDescriptor desc, int8_t bpc)
+// Constructor used for writes
+HdrDpxImageElement::HdrDpxImageElement(std::shared_ptr<Dpx::PixelArray> &pa, int ie_index, uint32_t width, uint32_t height, HdrDpxDescriptor desc, int8_t bpc)
 {
 	m_bpc = bpc; // TBD
 	m_width = width;
 	m_height = height;
 	m_isinitialized = true;
 	m_descriptor = desc;
-	if (bpc < 32)
-		m_datum_type = DATUM_INT32;
-	else
-		m_datum_type = DATUM_DOUBLE;
 	memset(&m_dpx_imageelement, 0xff, sizeof(HDRDPX_IMAGEELEMENT));
-	if (desc == Dpx::eDescCbCr || desc == Dpx::eDescCbYCrY || desc == Dpx::eDescCbYACrYA ||
-		desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
-		desc == Dpx::eDescCYAYA)
+	if (desc == eDescCbCr || desc == eDescCbYCrY || desc == eDescCbYACrYA ||
+		desc == eDescCb || desc == eDescCr || desc == eDescCYY ||
+		desc == eDescCYAYA)
 		m_h_subsampled = true;
 	else
 		m_h_subsampled = false;
-	if (desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
-		desc == Dpx::eDescCYAYA)
+	if (desc == eDescCb || desc == eDescCr || desc == eDescCYY ||
+		desc == eDescCYAYA)
 		m_v_subsampled = true;
 	else
 		m_v_subsampled = false;
+	m_pixel_array = pa;
 	CompileDatumPlanes();
 }
 
-HdrDpxImageElement::HdrDpxImageElement(HDRDPXFILEFORMAT header, int ie)
+//  Constructor used for reads (called from HdrDpxFile only)
+HdrDpxImageElement::HdrDpxImageElement(std::shared_ptr<PixelArray> &pa, int ie_index, HDRDPXFILEFORMAT &header)
 {
-	Dpx::HdrDpxDescriptor desc;
-	m_bpc = header.ImageHeader.ImageElement[ie].BitSize;
+	HdrDpxDescriptor desc;
+	m_bpc = header.ImageHeader.ImageElement[ie_index].BitSize;
 	ASSERT_MSG((m_bpc == 1) || (m_bpc == 8) || (m_bpc == 10) || (m_bpc == 12) || (m_bpc == 16) || (m_bpc == 32) || (m_bpc == 64), "Read invalid bit depth\n");
-	desc = m_descriptor = static_cast<Dpx::HdrDpxDescriptor>(header.ImageHeader.ImageElement[ie].Descriptor);
-	if (desc == Dpx::eDescCbCr || desc == Dpx::eDescCbYCrY || desc == Dpx::eDescCbYACrYA ||
-		desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
-		desc == Dpx::eDescCYAYA)
+	desc = m_descriptor = static_cast<HdrDpxDescriptor>(header.ImageHeader.ImageElement[ie_index].Descriptor);
+	if (desc == eDescCbCr || desc == eDescCbYCrY || desc == eDescCbYACrYA ||
+		desc == eDescCb || desc == eDescCr || desc == eDescCYY ||
+		desc == eDescCYAYA)
 		m_h_subsampled = true;
 	else
 		m_h_subsampled = false;
-	if (desc == Dpx::eDescCb || desc == Dpx::eDescCr || desc == Dpx::eDescCYY ||
-		desc == Dpx::eDescCYAYA)
+	if (desc == eDescCb || desc == eDescCr || desc == eDescCYY ||
+		desc == eDescCYAYA)
 		m_v_subsampled = true;
 	else
 		m_v_subsampled = false;
 	m_width = ComputeWidth(header.ImageHeader.PixelsPerLine);
 	m_height = ComputeHeight(header.ImageHeader.LinesPerElement);
 	m_isinitialized = true;
-	if (m_bpc < 32)
-		m_datum_type = DATUM_INT32;
-	else
-		m_datum_type = DATUM_DOUBLE;
-	m_dpx_imageelement = header.ImageHeader.ImageElement[ie];
+	m_dpx_imageelement = header.ImageHeader.ImageElement[ie_index];
+	m_pixel_array = pa;
 	CompileDatumPlanes();
-}
-
-HdrDpxImageElement::HdrDpxImageElement(void)
-{
-	m_isinitialized = false;
+	pa->Allocate(m_width, m_height, (m_dpx_imageelement.DataSign == 1), m_bpc, m_planes);
 }
 
 HdrDpxImageElement::~HdrDpxImageElement()
 {
-	// Make sure we deallocate DatumPlanes
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-		dp->Destroy();
+	;
 }
 
 uint32_t HdrDpxImageElement::ComputeWidth(uint32_t w)
@@ -103,99 +124,281 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 	m_planes.clear();
 	switch (m_descriptor)
 	{
-	case Dpx::eDescUser:
-	case Dpx::eDescUndefined:
+	case eDescUser:
+	case eDescUndefined:
+		m_planes.push_back(DATUM_UNSPEC);
+		break;
+	case eDescR:
+		m_planes.push_back(DATUM_R);
+		break;
+	case eDescG:
+		m_planes.push_back(DATUM_G);
+		break;
+	case eDescB:
+		m_planes.push_back(DATUM_B);
+		break;
+	case eDescA:
+		m_planes.push_back(DATUM_A);
+		break;
+	case eDescY:
+		m_planes.push_back(DATUM_Y);
+		break;
+	case eDescCbCr:
+		m_planes.push_back(DATUM_CB);
+		m_planes.push_back(DATUM_CR);
+		break;
+	case eDescZ:
+		m_planes.push_back(DATUM_Z);
+		break;
+	case eDescComposite:
+		m_planes.push_back(DATUM_COMPOSITE);
+		break;
+	case eDescCb:
+		m_planes.push_back(DATUM_CB);
+		break;
+	case eDescCr:
+		m_planes.push_back(DATUM_CR);
+		break;
+	case eDescRGB_268_1:
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_B);
+		break;
+	case eDescRGBA_268_1:
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_A);
+		break;
+	case eDescABGR_268_1:
+		m_planes.push_back(DATUM_A);
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_R);
+		break;
+	case eDescBGR:
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_R);
+		break;
+	case eDescBGRA:
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_A);
+		break;
+	case eDescARGB:
+		m_planes.push_back(DATUM_A);
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_B);
+		break;
+	case eDescRGB:
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_B);
+		break;
+	case eDescRGBA:
+		m_planes.push_back(DATUM_R);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_A);
+		break;
+	case eDescABGR:
+		m_planes.push_back(DATUM_A);
+		m_planes.push_back(DATUM_B);
+		m_planes.push_back(DATUM_G);
+		m_planes.push_back(DATUM_R);
+		break;
+	case eDescCbYCrY:
+		m_planes.push_back(DATUM_CB);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_CR);
+		m_planes.push_back(DATUM_Y2);
+		break;
+	case eDescCbYACrYA:
+		m_planes.push_back(DATUM_CB);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_A);
+		m_planes.push_back(DATUM_CR);
+		m_planes.push_back(DATUM_Y2);
+		m_planes.push_back(DATUM_A2);
+		break;
+	case eDescCbYCr:
+		m_planes.push_back(DATUM_CB);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_CR);
+		break;
+	case eDescCbYCrA:
+		m_planes.push_back(DATUM_CB);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_CR);
+		m_planes.push_back(DATUM_A);
+		break;
+	case eDescCYY:
+		m_planes.push_back(DATUM_C);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_Y2);
+		break;
+	case eDescCYAYA:
+		m_planes.push_back(DATUM_C);
+		m_planes.push_back(DATUM_Y);
+		m_planes.push_back(DATUM_A);
+		m_planes.push_back(DATUM_Y2);
+		m_planes.push_back(DATUM_A2);
+		break;
+	case eDescGeneric2:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		break;
+	case eDescGeneric3:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		break;
+	case eDescGeneric4:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		m_planes.push_back(DATUM_UNSPEC4);
+		break;
+	case eDescGeneric5:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		m_planes.push_back(DATUM_UNSPEC4);
+		m_planes.push_back(DATUM_UNSPEC5);
+		break;
+	case eDescGeneric6:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		m_planes.push_back(DATUM_UNSPEC4);
+		m_planes.push_back(DATUM_UNSPEC5);
+		m_planes.push_back(DATUM_UNSPEC6);
+		break;
+	case eDescGeneric7:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		m_planes.push_back(DATUM_UNSPEC4);
+		m_planes.push_back(DATUM_UNSPEC5);
+		m_planes.push_back(DATUM_UNSPEC6);
+		m_planes.push_back(DATUM_UNSPEC7);
+		break;
+	case eDescGeneric8:
+		m_planes.push_back(DATUM_UNSPEC);
+		m_planes.push_back(DATUM_UNSPEC2);
+		m_planes.push_back(DATUM_UNSPEC3);
+		m_planes.push_back(DATUM_UNSPEC4);
+		m_planes.push_back(DATUM_UNSPEC5);
+		m_planes.push_back(DATUM_UNSPEC6);
+		m_planes.push_back(DATUM_UNSPEC7);
+		m_planes.push_back(DATUM_UNSPEC8);
+		break;
+	}
+
+}
+
+#if 0
+void HdrDpxImageElement::CompileDatumPlanes(void)
+{
+	m_planes.clear();
+	switch (m_descriptor)
+	{
+	case eDescUser:
+	case eDescUndefined:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		break;
-	case Dpx::eDescR:
+	case eDescR:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
 		break;
-	case Dpx::eDescG:
+	case eDescG:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
 		break;
-	case Dpx::eDescB:
+	case eDescB:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
 		break;
-	case Dpx::eDescA:
+	case eDescA:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
 		break;
-	case Dpx::eDescY:
+	case eDescY:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		break;
-	case Dpx::eDescCbCr:
+	case eDescCbCr:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CR)));
 		break;
-	case Dpx::eDescZ:
+	case eDescZ:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Z)));
 		break;
-	case Dpx::eDescComposite:
+	case eDescComposite:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_COMPOSITE)));
 		break;
-	case Dpx::eDescCb:
+	case eDescCb:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		break;
-	case Dpx::eDescCr:
+	case eDescCr:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CR)));
 		break;
-	case Dpx::eDescRGB_268_1:
+	case eDescRGB_268_1:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
 		break;
-	case Dpx::eDescRGBA_268_1:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
-		break;
-	case Dpx::eDescABGR_268_1:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		break;
-	case Dpx::eDescBGR:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		break;
-	case Dpx::eDescBGRA:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
-		break;
-	case Dpx::eDescARGB:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		break;
-	case Dpx::eDescRGB:
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
-		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
-		break;
-	case Dpx::eDescRGBA:
+	case eDescRGBA_268_1:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
 		break;
-	case Dpx::eDescABGR:
+	case eDescABGR_268_1:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
 		break;
-	case Dpx::eDescCbYCrY:
+	case eDescBGR:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		break;
+	case eDescBGRA:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
+		break;
+	case eDescARGB:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		break;
+	case eDescRGB:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		break;
+	case eDescRGBA:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
+		break;
+	case eDescABGR:
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_B)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_G)));
+		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_R)));
+		break;
+	case eDescCbYCrY:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CR)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2)));
 		break;
-	case Dpx::eDescCbYACrYA:
+	case eDescCbYACrYA:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
@@ -203,52 +406,52 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A2)));
 		break;
-	case Dpx::eDescCbYCr:
+	case eDescCbYCr:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CR)));
 		break;
-	case Dpx::eDescCbYCrA:
+	case eDescCbYCrA:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CB)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_CR)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
 		break;
-	case Dpx::eDescCYY:
+	case eDescCYY:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_C)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2)));
 		break;
-	case Dpx::eDescCYAYA:
+	case eDescCYAYA:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_C)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_A2)));
 		break;
-	case Dpx::eDescGeneric2:
+	case eDescGeneric2:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		break;
-	case Dpx::eDescGeneric3:
+	case eDescGeneric3:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
 		break;
-	case Dpx::eDescGeneric4:
+	case eDescGeneric4:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC4)));
 		break;
-	case Dpx::eDescGeneric5:
+	case eDescGeneric5:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC4)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC5)));
 		break;
-	case Dpx::eDescGeneric6:
+	case eDescGeneric6:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
@@ -256,7 +459,7 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC5)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC6)));
 		break;
-	case Dpx::eDescGeneric7:
+	case eDescGeneric7:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
@@ -265,7 +468,7 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC6)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC7)));
 		break;
-	case Dpx::eDescGeneric8:
+	case eDescGeneric8:
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2)));
 		m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3)));
@@ -279,105 +482,104 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 }
 
 
-#if 0
 void HdrDpxImageElement::CompileDatumPlanes(void)
 {
 	m_planes.clear();
 	switch (m_descriptor)
 	{
-	case Dpx::eDescUser:
-	case Dpx::eDescUndefined:
+	case eDescUser:
+	case eDescUndefined:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		break;
-	case Dpx::eDescR:
+	case eDescR:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
 		break;
-	case Dpx::eDescG:
+	case eDescG:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
 		break;
-	case Dpx::eDescB:
+	case eDescB:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
 		break;
-	case Dpx::eDescA:
+	case eDescA:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
 		break;
-	case Dpx::eDescY:
+	case eDescY:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		break;
-	case Dpx::eDescCbCr:
+	case eDescCbCr:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CR));
 		break;
-	case Dpx::eDescZ:
+	case eDescZ:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Z));
 		break;
-	case Dpx::eDescComposite:
+	case eDescComposite:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_COMPOSITE));
 		break;
-	case Dpx::eDescCb:
+	case eDescCb:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		break;
-	case Dpx::eDescCr:
+	case eDescCr:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CR));
 		break;
-	case Dpx::eDescRGB_268_1:
+	case eDescRGB_268_1:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
 		break;
-	case Dpx::eDescRGBA_268_1:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
-		break;
-	case Dpx::eDescABGR_268_1:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		break;
-	case Dpx::eDescBGR:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		break;
-	case Dpx::eDescBGRA:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
-		break;
-	case Dpx::eDescARGB:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		break;
-	case Dpx::eDescRGB:
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
-		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
-		break;
-	case Dpx::eDescRGBA:
+	case eDescRGBA_268_1:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
 		break;
-	case Dpx::eDescABGR:
+	case eDescABGR_268_1:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
 		break;
-	case Dpx::eDescCbYCrY:
+	case eDescBGR:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		break;
+	case eDescBGRA:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
+		break;
+	case eDescARGB:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		break;
+	case eDescRGB:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		break;
+	case eDescRGBA:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
+		break;
+	case eDescABGR:
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_B));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_G));
+		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_R));
+		break;
+	case eDescCbYCrY:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CR));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2));
 		break;
-	case Dpx::eDescCbYACrYA:
+	case eDescCbYACrYA:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
@@ -385,52 +587,52 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A2));
 		break;
-	case Dpx::eDescCbYCr:
+	case eDescCbYCr:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CR));
 		break;
-	case Dpx::eDescCbYCrA:
+	case eDescCbYCrA:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CB));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_CR));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
 		break;
-	case Dpx::eDescCYY:
+	case eDescCYY:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_C));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2));
 		break;
-	case Dpx::eDescCYAYA:
+	case eDescCYAYA:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_C));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_Y2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_A2));
 		break;
-	case Dpx::eDescGeneric2:
+	case eDescGeneric2:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		break;
-	case Dpx::eDescGeneric3:
+	case eDescGeneric3:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
 		break;
-	case Dpx::eDescGeneric4:
+	case eDescGeneric4:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC4));
 		break;
-	case Dpx::eDescGeneric5:
+	case eDescGeneric5:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC4));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC5));
 		break;
-	case Dpx::eDescGeneric6:
+	case eDescGeneric6:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
@@ -438,7 +640,7 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC5));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC6));
 		break;
-	case Dpx::eDescGeneric7:
+	case eDescGeneric7:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
@@ -447,7 +649,7 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC6));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC7));
 		break;
-	case Dpx::eDescGeneric8:
+	case eDescGeneric8:
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC2));
 		m_planes.push_back(DatumPlane(m_width, m_height, m_datum_type, DATUM_UNSPEC3));
@@ -464,11 +666,7 @@ void HdrDpxImageElement::CompileDatumPlanes(void)
 
 std::vector<DatumLabel> HdrDpxImageElement::GetDatumLabels(void)
 {
-	std::vector<DatumLabel> dl_list;
-
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-		dl_list.push_back(dp->m_datum_label);
-	return dl_list;
+	return m_planes;
 }
 
 int HdrDpxImageElement::GetNumberOfComponents(void)
@@ -478,9 +676,9 @@ int HdrDpxImageElement::GetNumberOfComponents(void)
 
 #define READ_DPX_32(x)   (bswap ? (((((x) & 0xff) << 24) | (((x) & 0xff00) << 8) | (((x) & 0xff0000) >> 8) | ((x) >> 24))) : (x))
 
-Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direction_r2l, bool bswap)
+ErrorObject HdrDpxImageElement::ReadImageData(std::ifstream &infile, bool direction_r2l, bool bswap)
 {
-	Dpx::ErrorObject err;
+	ErrorObject err;
 	uint32_t xpos, ypos;
 	int component;
 	int num_components;
@@ -501,6 +699,8 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 	int rle_count = 0;  
 	bool rle_is_same;
 	bool freeze_increment = false;
+	int32_t int_datum;
+	int32_t rle_pixel[8];
 
 	num_components = GetNumberOfComponents();
 
@@ -520,7 +720,7 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 		case 1:
 		case 8:
 		case 16:
-			m_planes[component]->i_datum[ypos][xpos] = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
+			int_datum = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
 			break;
 		case 10:
 		case 12:
@@ -550,7 +750,8 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 						}
 					}
 				}
-				m_planes[component]->i_datum[ypos][xpos] = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
+				
+				int_datum = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
 				if (!direction_r2l)
 				{
 					if (fifo.m_fullness == 64 - 30)
@@ -599,7 +800,7 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 						}
 					}
 				}
-				m_planes[component]->i_datum[ypos][xpos] = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
+				int_datum = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
 				if (direction_r2l)
 				{
 					if (fifo.m_fullness == 64 - 30)
@@ -624,17 +825,17 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 			}
 			else   // Packed
 			{ 
-				m_planes[component]->i_datum[ypos][xpos] = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
+				int_datum = fifo.GetDatum(m_bpc, is_signed, direction_r2l);
 			}
 			break;
 		case 32:
 			c_r32.d = fifo.GetBitsUi(32);
-			m_planes[component]->lf_datum[ypos][xpos] = c_r32.r32;
+			m_pixel_array->SetComponent(m_planes[component], xpos, ypos, c_r32.r32);
 			break;
 		case 64:
 			c_r64.d[0] = fifo.GetBitsUi(32);
 			c_r64.d[1] = fifo.GetBitsUi(32);
-			m_planes[component]->lf_datum[ypos][xpos] = c_r64.r64;
+			m_pixel_array->SetComponent(m_planes[component], xpos, ypos, c_r64.r64);
 			break;
 		}
 		if (m_dpx_imageelement.Encoding == 1) // RLE
@@ -642,30 +843,32 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 			if (rle_state == 0)
 			{
 				rle_state++;
-				run_length = (m_planes[component]->i_datum[ypos][xpos] >> 1) & INT32_MAX;
+				run_length = (int_datum >> 1) & INT16_MAX;
 				if (run_length == 0 && !m_warn_zero_run_length)
 				{
 					m_warn_zero_run_length = true;
-					m_warnings.push_back("Encountered a run-length of zero, first occurred at " + to_string(xpos) + ", " + to_string(ypos));
+					m_warnings.push_back("Encountered a run-length of zero, first occurred at " + std::to_string(xpos) + ", " + std::to_string(ypos));
 				}
 				freeze_increment = true;
 				rle_count = 0;
-				rle_is_same = (m_planes[component]->i_datum[ypos][xpos] & 1);
+				rle_is_same = (int_datum & 1);
 			}
 			else if (component == num_components - 1)
 			{
+				m_pixel_array->SetComponent(m_planes[component], xpos, ypos, int_datum);
+				rle_pixel[component] = int_datum;
 				if (rle_is_same)
 				{
 					if (xpos + run_length > m_width && !m_warn_rle_same_past_eol)
 					{
 						m_warn_rle_same_past_eol = true;
-						m_warnings.push_back("RLE same-pixel run went past the end of a line, first occurred at " + to_string(xpos) + ", " + to_string(ypos));
+						m_warnings.push_back("RLE same-pixel run went past the end of a line, first occurred at " + std::to_string(xpos) + ", " + std::to_string(ypos));
 					}
 					for (int i = 1; i < run_length; ++i)
 					{
 						for (int c = 0; c < num_components; ++c)
 						{
-							m_planes[c]->i_datum[ypos][xpos + i] = m_planes[c]->i_datum[ypos][xpos];
+							m_pixel_array->SetComponent(m_planes[c], xpos + i, ypos, rle_pixel[c]);
 						}
 					}
 					component = 0;
@@ -684,16 +887,21 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 						if (xpos >= m_width && !m_warn_rle_diff_past_eol)
 						{
 							m_warn_rle_diff_past_eol = true;
-							m_warnings.push_back("RLE different-pixel run went past the end of a line, first occurred at " + to_string(xpos) + ", " + to_string(ypos));
+							m_warnings.push_back("RLE different-pixel run went past the end of a line, first occurred at " + std::to_string(xpos) + ", " + std::to_string(ypos));
 						}
 					}
 				}
 			}
-			else 
+			else
+			{
+				m_pixel_array->SetComponent(m_planes[component], xpos, ypos, int_datum);
+				rle_pixel[component] = int_datum;
 				component++;
+			}
 		}
 		else			// No RLE
 		{
+			m_pixel_array->SetComponent(m_planes[component], xpos, ypos, int_datum);
 			component++;
 			if (component == num_components)
 			{
@@ -711,7 +919,7 @@ Dpx::ErrorObject HdrDpxImageElement::ReadImageData(ifstream &infile, bool direct
 }
 
 
-void HdrDpxImageElement::WriteFlush(Fifo *fifo, ofstream &ofile)
+void HdrDpxImageElement::WriteFlush(Fifo *fifo, std::ofstream &ofile)
 {
 	uint32_t image_data_word;
 
@@ -725,7 +933,7 @@ void HdrDpxImageElement::WriteFlush(Fifo *fifo, ofstream &ofile)
 }
 
 
-void HdrDpxImageElement::WriteDatum(Fifo *fifo, int32_t datum, ofstream &ofile)
+void HdrDpxImageElement::WriteDatum(Fifo *fifo, int32_t datum, std::ofstream &ofile)
 {
 	switch (m_dpx_imageelement.Packing)
 	{
@@ -750,7 +958,7 @@ void HdrDpxImageElement::WriteDatum(Fifo *fifo, int32_t datum, ofstream &ofile)
 	WriteFlush(fifo, ofile);
 }
 
-void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, ofstream &ofile)
+void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, std::ofstream &ofile)
 {
 	int component;
 	int num_components;
@@ -762,6 +970,7 @@ void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, of
 		float r32;
 		uint32_t d;
 	} c_r32;
+	int32_t int_datum;
 
 	num_components = GetNumberOfComponents();
 
@@ -774,15 +983,16 @@ void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, of
 		case 10:
 		case 12:
 		case 16:
-			WriteDatum(fifo, m_planes[component]->i_datum[ypos][xpos], ofile);
+			m_pixel_array->GetComponent(m_planes[component], xpos, ypos, int_datum);
+			WriteDatum(fifo, int_datum, ofile);
 			break;
 		case 32:
-			c_r32.r32 = static_cast<float>(m_planes[component]->lf_datum[ypos][xpos]);
+			m_pixel_array->GetComponent(m_planes[component], xpos, ypos, c_r32.r32);
 			fifo->PutBits(c_r32.d, 32);
 			WriteFlush(fifo, ofile);
 			break;
 		case 64:
-			c_r64.r64 = m_planes[component]->lf_datum[ypos][xpos];
+			m_pixel_array->GetComponent(m_planes[component], xpos, ypos, c_r64.r64);
 			fifo->PutBits(c_r64.d[0], 32);
 			fifo->PutBits(c_r64.d[1], 32);
 			WriteFlush(fifo, ofile);
@@ -792,35 +1002,25 @@ void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, of
 	}
 }
 
-bool HdrDpxImageElement::IsNextSame(uint32_t xpos, uint32_t ypos)
+bool HdrDpxImageElement::IsNextSame(uint32_t xpos, uint32_t ypos, int32_t pixel[])
 {
-	bool same = true;
 	int num_components;
+	int32_t datum;
 
 	if (xpos >= m_width - 1)
 		return false;
 	num_components = GetNumberOfComponents();
 
-	if (m_bpc < 32)		// Integer
+	for (int c = 0; c < num_components; ++c)
 	{
-		for (int c = 0; c < num_components; ++c)
-		{
-			if (m_planes[c]->i_datum[ypos][xpos] != m_planes[c]->i_datum[ypos][xpos + 1])
-				same = false;
-		}
+		m_pixel_array->GetComponent(m_planes[c], xpos, ypos, datum);
+		if (pixel[c] != datum)
+			return false;
 	}
-	else
-	{   // Float
-		for (int c = 0; c < num_components; ++c)
-		{
-			if (m_planes[c]->lf_datum[ypos][xpos] != m_planes[c]->lf_datum[ypos][xpos + 1])
-				same = false;
-		}
-	}
-	return same;
+	return true;
 }
 
-void HdrDpxImageElement::WriteLineEnd(Fifo *fifo, ofstream &ofile)
+void HdrDpxImageElement::WriteLineEnd(Fifo *fifo, std::ofstream &ofile)
 {
 	if (fifo->m_fullness & 0x1f)   // not an even multiple of 32 
 		fifo->PutDatum(0, 32 - (fifo->m_fullness & 0x1f), m_direction_r2l);
@@ -829,9 +1029,9 @@ void HdrDpxImageElement::WriteLineEnd(Fifo *fifo, ofstream &ofile)
 
 
 
-Dpx::ErrorObject HdrDpxImageElement::WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap)
+ErrorObject HdrDpxImageElement::WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap)
 {
-	Dpx::ErrorObject err;
+	ErrorObject err;
 	uint32_t xpos, ypos;
 	int component;
 	int num_components;
@@ -841,6 +1041,7 @@ Dpx::ErrorObject HdrDpxImageElement::WriteImageData(std::ofstream &outfile, bool
 	bool freeze_increment = false;
 	unsigned int max_run;
 	bool run_type;
+	int32_t rle_pixel[8];
 
 	num_components = GetNumberOfComponents();
 	max_run = (1 << (m_bpc - 1)) - 1;
@@ -856,15 +1057,18 @@ Dpx::ErrorObject HdrDpxImageElement::WriteImageData(std::ofstream &outfile, bool
 		{
 			if (xpos == m_width - 1)  // Only one pixel left on line
 			{
-				WriteDatum(&fifo, 2, outfile);
-				for (component = 0; component < num_components; ++component)
-					WriteDatum(&fifo, m_planes[component]->i_datum[ypos][xpos], outfile);
+				WriteDatum(&fifo, 2, outfile);  // Indicates run of 1 pixel
+				WritePixel(&fifo, xpos, ypos, outfile);
 			}
 			else {
-				run_type = IsNextSame(xpos, ypos);
+				for (component = 0; component < num_components; ++component)
+				{
+					m_pixel_array->GetComponent(m_planes[component], xpos, ypos, rle_pixel[component]);
+				}
+				run_type = IsNextSame(xpos, ypos, rle_pixel);
 				for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
 				{
-					if (IsNextSame(xpos + run_length, ypos) != run_type)
+					if (IsNextSame(xpos + run_length, ypos, rle_pixel) != run_type)
 						break;
 				}
 				run_length++;
@@ -915,64 +1119,64 @@ void HdrDpxImageElement::ResetWarnings(void)
 	m_warn_zero_run_length = false;
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsDataSign f, Dpx::HdrDpxDataSign d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsDataSign f, HdrDpxDataSign d)
 {
 	m_dpx_imageelement.DataSign = static_cast<uint8_t>(d);
 }
 
-Dpx::HdrDpxDataSign HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsDataSign f)
+HdrDpxDataSign HdrDpxImageElement::GetHeader(HdrDpxFieldsDataSign f)
 {
-	return static_cast<Dpx::HdrDpxDataSign>(m_dpx_imageelement.DataSign);
+	return static_cast<HdrDpxDataSign>(m_dpx_imageelement.DataSign);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxIEFieldsR32 f, float d)
+void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsR32 f, float d)
 {
 	switch (f)
 	{
-	case Dpx::eReferenceLowDataCode:
+	case eReferenceLowDataCode:
 		if (m_bpc >= 32)
 			m_dpx_imageelement.LowData.f = d;
 		else
 			m_dpx_imageelement.LowData.d = (uint32_t)(d + 0.5); // Could add bounds checking
 		break;
-	case Dpx::eReferenceLowQuantity:
+	case eReferenceLowQuantity:
 		m_dpx_imageelement.LowQuantity = d;
 		break;
-	case Dpx::eReferenceHighDataCode:
+	case eReferenceHighDataCode:
 		if (m_bpc >= 32)
 			m_dpx_imageelement.HighData.f = d;
 		else
 			m_dpx_imageelement.HighData.d = (uint32_t)(d + 0.5);
 		break;
-	case Dpx::eReferenceHighQuantity:
+	case eReferenceHighQuantity:
 		m_dpx_imageelement.HighQuantity = d;
 	}
 }
 
-float HdrDpxImageElement::GetHeader(Dpx::HdrDpxIEFieldsR32 f)
+float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 f)
 {
 	switch (f)
 	{
-	case Dpx::eReferenceLowDataCode:
+	case eReferenceLowDataCode:
 		if (m_bpc >= 32)
 			return m_dpx_imageelement.LowData.f;
 		else
 			return (float)m_dpx_imageelement.LowData.d;
-	case Dpx::eReferenceLowQuantity:
+	case eReferenceLowQuantity:
 		return m_dpx_imageelement.LowQuantity;
-	case Dpx::eReferenceHighDataCode:
+	case eReferenceHighDataCode:
 		if (m_bpc == 32)
 			return m_dpx_imageelement.LowData.f;
 		else
 			return (float)(m_dpx_imageelement.LowData.d);
-	case Dpx::eReferenceHighQuantity:
+	case eReferenceHighQuantity:
 		return m_dpx_imageelement.HighQuantity;
 	}
 	return 0;
 }
 
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDescriptor d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsDescriptor f, HdrDpxDescriptor d)
 {
 	if(m_isinitialized)	
 		m_warnings.push_back("SetHeader() call to set descriptor ignored; descriptor cannot be changed after IE is initialized");
@@ -980,32 +1184,32 @@ void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDes
 		m_dpx_imageelement.Descriptor = static_cast<uint8_t>(d);
 }
 
-Dpx::HdrDpxDescriptor HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsDescriptor f)
+HdrDpxDescriptor HdrDpxImageElement::GetHeader(HdrDpxFieldsDescriptor f)
 {
-	return static_cast<Dpx::HdrDpxDescriptor>(m_dpx_imageelement.Descriptor);
+	return static_cast<HdrDpxDescriptor>(m_dpx_imageelement.Descriptor);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsTransfer f, Dpx::HdrDpxTransfer d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsTransfer f, HdrDpxTransfer d)
 {
 	m_dpx_imageelement.Transfer = static_cast<uint8_t>(d);
 }
 
-Dpx::HdrDpxTransfer HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsTransfer f)
+HdrDpxTransfer HdrDpxImageElement::GetHeader(HdrDpxFieldsTransfer f)
 {
-	return static_cast<Dpx::HdrDpxTransfer>(m_dpx_imageelement.Transfer);
+	return static_cast<HdrDpxTransfer>(m_dpx_imageelement.Transfer);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsColorimetric f, Dpx::HdrDpxColorimetric d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorimetric f, HdrDpxColorimetric d)
 {
 	m_dpx_imageelement.Colorimetric = static_cast<uint8_t>(d);
 }
 
-Dpx::HdrDpxColorimetric HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsColorimetric f)
+HdrDpxColorimetric HdrDpxImageElement::GetHeader(HdrDpxFieldsColorimetric f)
 {
-	return static_cast<Dpx::HdrDpxColorimetric>(m_dpx_imageelement.Colorimetric);
+	return static_cast<HdrDpxColorimetric>(m_dpx_imageelement.Colorimetric);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDepth d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth f, HdrDpxBitDepth d)
 {
 	if(m_isinitialized)
 		m_warnings.push_back("SetHeader() call to set bit depth is ignored; bit depth cannot be changed after IE is initialized");
@@ -1013,119 +1217,66 @@ void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDe
 		m_dpx_imageelement.BitSize = static_cast<uint8_t>(d);
 }
 
-Dpx::HdrDpxBitDepth HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsBitDepth f)
+HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth f)
 {
-	return static_cast<Dpx::HdrDpxBitDepth>(m_dpx_imageelement.BitSize);
+	return static_cast<HdrDpxBitDepth>(m_dpx_imageelement.BitSize);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsPacking f, Dpx::HdrDpxPacking d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsPacking f, HdrDpxPacking d)
 {
 	m_dpx_imageelement.Packing = static_cast<uint16_t>(d);
 }
 
-Dpx::HdrDpxPacking HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsPacking f)
+HdrDpxPacking HdrDpxImageElement::GetHeader(HdrDpxFieldsPacking f)
 {
-	return static_cast<Dpx::HdrDpxPacking>(m_dpx_imageelement.Packing);
+	return static_cast<HdrDpxPacking>(m_dpx_imageelement.Packing);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxFieldsEncoding f, Dpx::HdrDpxEncoding d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsEncoding f, HdrDpxEncoding d)
 {
 	m_dpx_imageelement.Encoding = static_cast<uint16_t>(d);
 }
 
-Dpx::HdrDpxEncoding HdrDpxImageElement::GetHeader(Dpx::HdrDpxFieldsEncoding f)
+HdrDpxEncoding HdrDpxImageElement::GetHeader(HdrDpxFieldsEncoding f)
 {
-	return static_cast<Dpx::HdrDpxEncoding>(m_dpx_imageelement.Packing);
+	return static_cast<HdrDpxEncoding>(m_dpx_imageelement.Packing);
 }
 
-void HdrDpxImageElement::SetHeader(Dpx::HdrDpxIEFieldsU32 f, uint32_t d)
+void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsU32 f, uint32_t d)
 {
 	switch (f)
 	{
-	case Dpx::eOffsetToData:
+	case eOffsetToData:
 		m_dpx_imageelement.DataOffset = d;
 		break;
-	case Dpx::eEndOfLinePadding:
+	case eEndOfLinePadding:
 		m_dpx_imageelement.EndOfLinePadding = d;
 		break;
-	case Dpx::eEndOfImagePadding:
+	case eEndOfImagePadding:
 		m_dpx_imageelement.EndOfImagePadding = d;
 	}
 }
 
-uint32_t HdrDpxImageElement::GetHeader(Dpx::HdrDpxIEFieldsU32 f)
+uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f)
 {
 	switch (f)
 	{
-	case Dpx::eOffsetToData:
+	case eOffsetToData:
 		return m_dpx_imageelement.DataOffset;
-	case Dpx::eEndOfLinePadding:
+	case eEndOfLinePadding:
 		return m_dpx_imageelement.EndOfLinePadding;
-	case Dpx::eEndOfImagePadding:
+	case eEndOfImagePadding:
 		return m_dpx_imageelement.EndOfImagePadding;
 	}
 	return 0;
 }
 
-int32_t HdrDpxImageElement::GetPixelI(int x, int y, DatumLabel dtype)
-{
-	//for (std::shared_ptr<DatumPlane> dp : m_planes)
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-	{
-		if (dp->m_datum_label == dtype)
-		{
-			return dp->i_datum[y][x];
-		}
-	}
-	ASSERT_MSG(0, "Could not find plane with specified type");
-	return 0;
-}
-
-double HdrDpxImageElement::GetPixelLf(int x, int y, DatumLabel dtype)
-{
-	//for (std::shared_ptr<DatumPlane> dp : m_planes)
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-	{
-		if (dp->m_datum_label == dtype)
-		{
-			return dp->lf_datum[y][x];
-		}
-	}
-	ASSERT_MSG(0, "Could not find plane with specified type");
-	return 0;
-}
-
-void HdrDpxImageElement::SetPixelI(int x, int y, DatumLabel dtype, int32_t d)
-{
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-	{
-		if (dp->m_datum_label == dtype)
-		{
-			dp->i_datum[y][x] = d;
-			return;
-		}
-	}
-	ASSERT_MSG(0, "Could not find plane with specified type");
-}
-
-void HdrDpxImageElement::SetPixelLf(int x, int y, DatumLabel dtype, double d)
-{
-	for (std::shared_ptr<DatumPlane> dp : m_planes)
-	{
-		if (dp->m_datum_label == dtype)
-		{
-			dp->lf_datum[y][x] = d;
-			return;
-		}
-	}
-	ASSERT_MSG(0, "Could not find plane with specified type");
-}
 
 void HdrDpxImageElement::AddPlane(DatumLabel dlabel)
 {
 	ASSERT_MSG(m_isinitialized, "Can't add a plane until image element is initialized");
 
-	m_planes.push_back(std::shared_ptr<DatumPlane>(new DatumPlane(m_width, m_height, m_datum_type, dlabel)));
+	m_planes.push_back(dlabel);
 }
 
 uint32_t HdrDpxImageElement::GetWidth(void)
@@ -1184,4 +1335,30 @@ std::string HdrDpxImageElement::DatumLabelToName(DatumLabel dl)
 		return "Unspec8";
 	}
 	return "Unrecognized";
+}
+
+/*
+bool HdrDpxImageElement::IsOk(void)
+{
+	return m_err.GetWorstSeverity() != eFatal;
+}
+
+int HdrDpxImageElement::GetNumErrors(void)
+{
+	return m_err.GetNumErrors();
+}
+
+void HdrDpxImageElement::GetError(int index, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg)
+{
+	return m_err.GetError(index, errcode, severity, errmsg);
+}
+
+void HdrDpxImageElement::ClearErrors()
+{
+	m_err.Clear();
+} */
+
+bool HdrDpxImageElement::IsFloat(void)
+{
+	return m_dpx_imageelement.BitSize >= 32;
 }

@@ -1,170 +1,73 @@
+/***************************************************************************
+*    Copyright (c) 2020, Broadcom Inc.
+*
+*
+*  Redistribution and use in source and binary forms, with or without
+*  modification, are permitted provided that the following conditions are
+*  met:
+*
+*  1. Redistributions of source code must retain the above copyright notice,
+*     this list of conditions and the following disclaimer.
+*
+*  2. Redistributions in binary form must reproduce the above copyright
+*     notice, this list of conditions and the following disclaimer in the
+*     documentation and/or other materials provided with the distribution.
+*
+*  3. Neither the name of the copyright holder nor the names of its
+*     contributors may be used to endorse or promote products derived from
+*     this software without specific prior written permission.
+*
+*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+*  IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+*  THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+*  PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+*  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+*  PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+*  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+*  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+*  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+*  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+***************************************************************************/
 #pragma once
 
 #ifndef DATUM_H
 #define DATUM_H
-#include <cstdint>
-#include <list>
-#include <algorithm>
-#include <limits>
-#include <memory>
+#include <string>
 
-enum DatumLabel {
-	DATUM_UNSPEC, DATUM_R, DATUM_G, DATUM_B, DATUM_A, DATUM_Y, DATUM_CB, DATUM_CR, DATUM_Z, DATUM_COMPOSITE, DATUM_A2, DATUM_Y2, DATUM_C,
-	DATUM_UNSPEC2, DATUM_UNSPEC3, DATUM_UNSPEC4, DATUM_UNSPEC5, DATUM_UNSPEC6, DATUM_UNSPEC7, DATUM_UNSPEC8
-};
+namespace Dpx {
 
-enum DatumDType {
-	DATUM_INT32, DATUM_DOUBLE
-};
+	enum DatumLabel {
+		DATUM_UNSPEC, DATUM_R, DATUM_G, DATUM_B, DATUM_A, DATUM_Y, DATUM_CB, DATUM_CR, DATUM_Z, DATUM_COMPOSITE, DATUM_A2, DATUM_Y2, DATUM_C,
+		DATUM_UNSPEC2, DATUM_UNSPEC3, DATUM_UNSPEC4, DATUM_UNSPEC5, DATUM_UNSPEC6, DATUM_UNSPEC7, DATUM_UNSPEC8, DATUM_SIZE
+	};
 
-class DatumPlane {
-public:
-	DatumPlane(int w, int h, DatumDType dt, DatumLabel dl)
+	static std::string DatumLabelToName[] =
 	{
-		Allocate(w, h, dt, dl);
-	}
-	void Allocate(int w, int h, DatumDType dt, DatumLabel dl)
-	{
-		int i;
-		m_n_lines = h;
-		m_width = w;
-		m_datum_label = dl;
-		m_datum_type = dt;
-
-		if (dt == DATUM_INT32)
-			i_datum.resize(h);
-		else
-			lf_datum.resize(h);
-		for (i = 0; i < m_n_lines; ++i)
-		{
-			if (dt == DATUM_INT32)
-				i_datum[i].resize(m_width);
-			else
-				lf_datum[i].resize(m_width);
-		}
-		m_isallocated = true;
-	}
-	DatumPlane()
-	{
-		m_isallocated = false;
-	}
-	~DatumPlane()
-	{
-		//Destroy();
-	}
-	void Destroy(void)
-	{
-		int i;
-		if (!m_isallocated)
-			return;
-		for (i=0; i< m_n_lines; ++i)
-		{
-			if (m_datum_type == DATUM_INT32)
-				i_datum[i].clear();
-			else
-				lf_datum[i].clear();
-		}
-		if (m_datum_type == DATUM_INT32)
-			i_datum.clear();
-		else
-			lf_datum.clear();
-	}
-	bool operator==(DatumLabel const &l) { return m_datum_label == l; } // used for find function
-	/*DatumPlane& operator=(DatumPlane &dp)
-	{
-		if (this == &dp)
-			return *this;
-
-		m_isallocated = dp.m_isallocated;
-		m_datum_label = dp.m_datum_label;
-		m_n_lines = dp.m_n_lines;
-		m_datum_type = dp.m_datum_type;
-		m_width = dp.m_width;
-
-		if (m_isallocated)
-		{
-			for (int i = 0; i < m_n_lines; ++i)
-				std::memcpy(m_datum_line[i].i_datum, dp.m_datum_line[i].i_datum, m_width * ((m_datum_type == DATUM_INT32) ? sizeof(int32_t) : sizeof(double)));
-		}
-
-		return *this;
-	} */
-	DatumLabel m_datum_label;
-	DatumDType m_datum_type;
-	int m_n_lines;
-	std::vector<std::vector<int32_t>> i_datum;
-	std::vector<std::vector<double>> lf_datum;
-	int m_width;
-	bool m_isallocated = false;
-};
+		"Unspecified(1)",
+		"R",
+		"G",
+		"B",
+		"A",
+		"Y",
+		"Cb",
+		"Cr",
+		"Z",
+		"Composite",
+		"A2",
+		"Y2",
+		"C",
+		"Unspecified(2)",
+		"Unspecified(3)",
+		"Unspecified(4)",
+		"Unspecified(5)",
+		"Unspecified(6)",
+		"Unspecified(7)",
+		"Unspecified(8)"
+	};
 
 
-/*
-class DatumImageElement
-{
-public:
-	DatumImageElement() { ;  }
-	DatumImageElement(int w, int h, int bpc)
-	{
-		m_width = w;
-		m_height = h;
-		m_nbits = bpc;
-		m_is_initialized = 1;
-	}
-	int32_t GetPixelI(int x, int y, DatumLabel dtype)
-	{
-		std::list<class DatumPlane>::iterator it = std::find(planes.begin(), planes.end(), dtype);
-		if (it == planes.end())
-			return(INT32_MAX);
-		else
-			return(*it.datum_line[y].i_datum[x]);
-	}
-	double GetPixelLf(int x, int y, DatumLabel dtype)
-	{
-		std::list<class DatumPlane>::iterator it = std::find(planes.begin(), planes.end(), dtype);
-		if (it == planes.end())
-			return(std::numeric_limits<double>::max());
-		else
-			return(*it.datum_line[y].lf_datum[x]);
-	}
-	void SetPixelUi(int x, int y, DatumLabel dtype, uint32_t d)
-	{
-		std::list<class DatumPlane>::iterator it = std::find(planes.begin(), planes.end(), dtype);
-		if (it != planes.end())
-			*it.datum_line[y].ui_datum[x] = d;
-	}
-	void SetPixelI(int x, int y, DatumLabel dtype, int32_t d)
-	{
-		std::list<class DatumPlane>::iterator it = std::find(planes.begin(), planes.end(), dtype);
-		if (it != planes.end())
-			*it.datum_line[y].i_datum[x] = d;
-	}
-	void SetPixelLf(int x, int y, DatumLabel dtype, double d)
-	{
-		std::list<class DatumPlane>::iterator it = std::find(planes.begin(), planes.end(), dtype);
-		if (it != planes.end())
-			*it.datum_line[y].lf_datum[x] = d;
-	}
-	void AddPlane(DatumLabel dtype)
-	{
-		DatumPlane *dp;
-
-		dp = new DatumPlane(width, height, dtype);
-		planes.push_back(dp);
-	}
-	int  IsInitialized(void) { return m_is_initialized; }
-
-// Member variables:
-	int m_is_initialized = 0;
-	int m_width;
-	int m_height;
-	int m_nbits;
-	int m_is_compressed;
-	int *m_n_datum_values_per_line;  // Number of datum vales on each line (all lines same for uncompressed/varies per line for compressed)
-	std::vector<class DatumPlane> planes;
-};
-
-*/
+}
 
 #endif
 

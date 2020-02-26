@@ -39,6 +39,7 @@
 #include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
+#include "generic_pixel_array.h"
 #include <iostream>
 
 void example_read(void);
@@ -101,22 +102,25 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
 
-	example_write();
+	//example_write();
+	example_read();
 
 	release_argn(argc, argn);
 	return(0);
 }
 
 
-void dump_error_log(Dpx::ErrorObject err)
+void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
 	Dpx::ErrorCode code;
 	Dpx::ErrorSeverity severity;
 	std::string msg;
 
-	for (int i = 0; i < err.GetNumErrors(); ++i)
+	std::cerr << logmessage;
+
+	for (int i = 0; i < f.GetNumErrors(); ++i)
 	{
-		err.GetError(i, code, severity, msg);
+		f.GetError(i, code, severity, msg);
 		std::cerr << msg << std::endl;
 	}
 }
@@ -124,15 +128,13 @@ void dump_error_log(Dpx::ErrorObject err)
 // Example calling sequence for HDR DPX read:
 void example_read()
 {
-	HdrDpxFile  f;
-	Dpx::ErrorObject err;
+	GenericPixelArrayContainer pac;
+	std::string filename("mydpxfile.dpx");
+	Dpx::HdrDpxFile  f(filename, pac);
 	
-	//err = f.Open("Clipboard-1.dpx");
-	err = f.Open("mydpxfile.dpx");
-	if (err.GetWorstSeverity() == Dpx::eFatal)   // can't open, unrecognized format
+	if (!f.IsOk())   // can't open, unrecognized format
 	{
-		std::cerr << "Read failed:\n";
-		dump_error_log(err);
+		dump_error_log("Read failed:\n", f);
 		return;// Code to handle failure to open
 	}
 
@@ -144,35 +146,45 @@ void example_read()
 		return;
 	}
 	
-	if (err = f.Validate())  // fields have to be valid, at least 1 image element, image data is interpretable, not out of bounds for offsets
+	if (f.Validate())  // fields have to be valid, at least 1 image element, image data is interpretable, not out of bounds for offsets
 	{
-		std::cerr << "Validation errors:\n";
-		dump_error_log(err);
+		dump_error_log("Validation errors:\n", f);
 	}
 
-	std::cout << f.DumpHeader();
-	for (std::shared_ptr<HdrDpxImageElement> ie : f.m_IE)
-	{
-		if (ie->m_isinitialized)
-		{
-			for (uint32_t i = 0; i < ie->GetHeight(); i++)
-			{
-				for (uint32_t j = 0; j < ie->GetWidth(); j++)
-				{
-					for (DatumLabel dl : ie->GetDatumLabels())
-					{
-						if (ie->GetHeader(Dpx::eBitDepth) <= 16)
-							std::cout << ie->DatumLabelToName(dl) << "=" << ie->GetPixelI(j, i, dl) << " ";
-						else
-							std::cout << ie->DatumLabelToName(dl) << "=" << ie->GetPixelLf(j, i, dl) << " ";
-					}
-					std::cout << "\n";
-				}
-			}
-		}
-	}
+	//std::cout << f;  // Dump header
+
+	pac.PrintPixels();
+
 }
 
+
+// Simple class to illustrate returning a constant pixel value
+class ConstPixelArray : public Dpx::PixelArray
+{
+public:
+	void Allocate(uint32_t w, uint32_t h, bool issigned, uint8_t bits, std::vector<Dpx::DatumLabel> components) { ; }
+	void SetComponent(Dpx::DatumLabel c, int x, int y, int32_t d) { ; }
+	void SetComponent(Dpx::DatumLabel c, int x, int y, float d) { ; }
+	void SetComponent(Dpx::DatumLabel c, int x, int y, double d) { ; }
+	void GetComponent(Dpx::DatumLabel c, int x, int y, int32_t &d)
+	{
+		if (c == Dpx::DATUM_R) d = 50;
+		else if (c == Dpx::DATUM_G) d = 60;
+		else if (c == Dpx::DATUM_B) d = 70;
+		else d = 0;
+	}
+	void GetComponent(Dpx::DatumLabel c, int x, int y, float &d) { ;  }
+	void GetComponent(Dpx::DatumLabel c, int x, int y, double &d) { ; }
+	bool IsOk(void) {
+		return true;
+	}
+	Dpx::ErrorObject GetErrors() {
+		return m_err;
+	}
+
+private:
+	Dpx::ErrorObject m_err;
+};
 
 // Example calling sequence for HDR DPX write (single image element case):
 void example_write()
@@ -182,21 +194,25 @@ void example_write()
 	const int width = 1920, height = 1080;
 	const int bit_depth = 8;
 	//HdrDpxImageElement ie(width, height, Dpx::eDescBGR, 8);  // Single image element with 8-bit components
-	uint32_t i, j;
-	HdrDpxFile dpxf;
-	std::shared_ptr<HdrDpxImageElement> ie;
-
-	ie = dpxf.CreateImageElement(width, height, Dpx::eDescBGR, bit_depth);
+	//uint32_t i, j;
+	Dpx::HdrDpxFile dpxf;
+	std::shared_ptr<Dpx::HdrDpxImageElement> ie;
+	std::shared_ptr<ConstPixelArray> pixel_array = static_cast<std::shared_ptr<ConstPixelArray>>(new ConstPixelArray);
+	
+	// accept typed array overload
+	ie = dpxf.CreateImageElement(pixel_array, 0, width, height, Dpx::eDescBGR, bit_depth);
 
 	// Create a picture (planes aren't ordered inside this data structure, so this sequence is arbitrary:)
-	//ie.SetHeader(Dpx::eBitDepth, 8);   // this would be invalid!!
-	//ie.SetHeader(Dpx::eDescriptor, Dpx::eDescBGR);  // this would be invalid!!
+	//ie->SetHeader(Dpx::eBitDepth, 8);   // this would be invalid!!
+	//ie->SetHeader(Dpx::eDescriptor, Dpx::eDescBGR);  // this would be invalid!!
 	ie->SetHeader(Dpx::eEncoding, Dpx::eEncodingRLE);
+
+#if 0   // No longer needed
 	for (i = 0; i < ie->GetHeight(); i++)
 	{
 		for (j = 0; j < ie->GetWidth(); j++)
 		{
-			if (bit_depth <= 16)
+			if (bit_depth <= 16)  // use data type function?
 			{
 				ie->SetPixelI(j, i, DATUM_R, 50);  // Set all pixels to R,G,B = (50, 60, 70)
 				ie->SetPixelI(j, i, DATUM_G, 60);
@@ -204,12 +220,13 @@ void example_write()
 			}
 			else
 			{
-				ie->SetPixelLf(j, i, DATUM_R, 0.5);  // Set all pixels to R,G,B = (.5, .6, .7)
-				ie->SetPixelLf(j, i, DATUM_G, 0.6);
-				ie->SetPixelLf(j, i, DATUM_B, 0.7);
+				ie->SetPixelF(j, i, DATUM_R, 0.5);  // Set all pixels to R,G,B = (.5, .6, .7)
+				ie->SetPixelF(j, i, DATUM_G, 0.6);
+				ie->SetPixelF(j, i, DATUM_B, 0.7);
 			}
 		}
 	}
+#endif 
 
 	// Create 2nd IE (TBD)
 
@@ -219,17 +236,22 @@ void example_write()
 	// Set header values as desired (defaults assumed based on image element structure)
 	dpxf.SetHeader(Dpx::eCopyright, "(C) 2019 XYZ Productions");  // Key is a string, value matches data type
 	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
-	if (err = dpxf.Validate())
+	if (dpxf.Validate())
 	{
-		std::cerr << "Validation errors:\n";
-		dump_error_log(err);
+		dump_error_log("Validation errors:\n", dpxf);
 	}
 
 	// Write the file
-	if (err = dpxf.WriteFile(fname))
+	dpxf.WriteFile(fname);
+	if (!dpxf.IsOk())
 	{
-		std::cerr << "File write message log:\n";
-		dump_error_log(err);
+		dump_error_log("File write message log:\n", dpxf);
 	}
 }
 
+/*
+std::ostream& operator<< (std::ostream& s, const Pixel3& rgb)
+{
+	return s << "{" << rgb.r << "," << rgb.g << "," << rgb.b << "}";
+}
+*/

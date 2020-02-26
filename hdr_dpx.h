@@ -1,5 +1,5 @@
 /***************************************************************************
-*    Copyright (c) 2018-2019, Broadcom Inc.
+*    Copyright (c) 2018-2020, Broadcom Inc.
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -32,18 +32,20 @@
 #ifndef HDR_DPX_H
 #define HDR_DPX_H
 #include <cstdint>
-#include <stdio.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <memory>
 #include <vector>
 #include <utility>
+#include <list>
 
 /*** hdr_dpx.h ***/
-#include "vdo.h"
 #include "datum.h"
 #include "fifo.h"
+#include "hdr_dpx_error.h"
+
+#define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 
 #ifndef DPX_H
 #define DPX_ERROR_UNRECOGNIZED_CHROMA  -1
@@ -91,6 +93,147 @@ typedef float SINGLE;
 #define INPUTNAME_SIZE	32
 #define INPUTSN_SIZE	32
 
+
+typedef struct _HDRDPX_GenericFileHeader
+{
+	DWORD Magic;           /* Magic number */
+	DWORD ImageOffset;     /* Offset to start of image data (bytes) */
+	char Version[8];      /* Version stamp of header format */
+	DWORD FileSize;        /* Total DPX file size (bytes) */
+	DWORD DittoKey;        /* Image content specifier */
+	DWORD GenericSize;     /* Generic section header length (bytes) */
+	DWORD IndustrySize;    /* Industry-specific header length (bytes) */
+	DWORD UserSize;        /* User-defined data length (bytes) */
+	char FileName[FILE_NAME_SIZE];   /* Name of DPX file */
+	char TimeDate[TIMEDATE_SIZE];    /* Time & date of file creation */
+	char Creator[CREATOR_SIZE];    /* Name of file creator */
+	char Project[PROJECT_SIZE];    /* Name of project */
+	char Copyright[COPYRIGHT_SIZE];  /* Copyright information */
+	DWORD EncryptKey;      /* Encryption key */
+	DWORD StandardsBasedMetadataOffset; /* Standards-based metadata offset */
+	BYTE  DatumMappingDirection;  /* Datum mapping direction */
+	BYTE  Reserved16_3;    /* Reserved field 16.3 */
+	WORD  Reserved16_4;	   /* Reserved field 16.4 */
+	BYTE  Reserved16_5[96];   /* Reserved field 16.5 */
+} HDRDPX_GENERICFILEHEADER;
+
+typedef union _HDRDPX_HiLoCode
+{
+	SINGLE f;
+	DWORD  d;
+} HDRDPX_HILOCODE;
+
+typedef struct _HDRDPX_ImageElement
+{
+	DWORD  DataSign;          /* Data sign extension */
+	HDRDPX_HILOCODE  LowData;           /* Reference low data code value */
+	SINGLE LowQuantity;       /* reference low quantity represented */
+	HDRDPX_HILOCODE  HighData;          /* Reference high data code value */
+	SINGLE HighQuantity;      /* reference high quantity represented */
+	BYTE   Descriptor;        /* Descriptor for image element */
+	BYTE   Transfer;          /* Transfer characteristics for element */
+	BYTE   Colorimetric;      /* Colorimetric specification for element */
+	BYTE   BitSize;           /* Bit size for element */
+	WORD   Packing;           /* Packing for element */
+	WORD   Encoding;          /* Encoding for element */
+	DWORD  DataOffset;        /* Offset to data of element */
+	DWORD  EndOfLinePadding;  /* End of line padding used in element */
+	DWORD  EndOfImagePadding; /* End of image padding used in element */
+	char   Description[DESCRIPTION_SIZE];   /* Description of element */
+} HDRDPX_IMAGEELEMENT;
+
+typedef struct _HDRDPX_GenericImageHeader
+{
+	WORD         Orientation;        /* Image orientation */
+	WORD         NumberElements;     /* Number of image elements */
+	DWORD        PixelsPerLine;      /* Pixels per line */
+	DWORD        LinesPerElement;    /* Lines per image element */
+	HDRDPX_IMAGEELEMENT ImageElement[NUM_IMAGE_ELEMENTS];
+	DWORD		 ChromaSubsampling;  /* Chroma subsampling descriptor (field 29.1) */
+	BYTE         Reserved[48];       /* Reserved field 29.2 */
+} HDRDPX_GENERICIMAGEHEADER;
+
+typedef struct _HDRDPX_GenericSourceInfoHeader
+{
+	DWORD  XOffset;         /* X offset */
+	DWORD  YOffset;         /* Y offset */
+	SINGLE XCenter;         /* X center */
+	SINGLE YCenter;         /* Y center */
+	DWORD  XOriginalSize;   /* X original size */
+	DWORD  YOriginalSize;   /* Y original size */
+	char SourceFileName[FILE_NAME_SIZE];   /* Source image file name */
+	char SourceTimeDate[TIMEDATE_SIZE];    /* Source image date & time */
+	char InputName[INPUTNAME_SIZE];   /* Input device name */
+	char InputSN[INPUTSN_SIZE];     /* Input device serial number */
+	WORD   Border[4];       /* Border validity (XL, XR, YT, YB) */
+	DWORD  AspectRatio[2];  /* Pixel aspect ratio H:V */
+	BYTE   Reserved[28];    /* Reserved */
+} HDRDPX_GENERICSOURCEINFOHEADER;
+
+typedef struct _HDRDPX_IndustryFilmInfoHeader
+{
+	char FilmMfgId[2];      /* Film manufacturer ID code */
+	char FilmType[2];       /* Film type */
+	char OffsetPerfs[2];    /* Offset in perfs */
+	char Prefix[6];         /* Prefix */
+	char Count[4];          /* Count */
+	char Format[32];        /* Format */
+	DWORD  FramePosition;     /* Frame position in sequence */
+	DWORD  SequenceLen;       /* Sequence length in frames */
+	DWORD  HeldCount;         /* Held count */
+	SINGLE FrameRate;         /* Frame rate of original in frames/sec */
+	SINGLE ShutterAngle;      /* Shutter angle of camera in degrees */
+	char FrameId[32];       /* Frame identification */
+	char SlateInfo[100];    /* Slate information */
+	BYTE   Reserved[56];      /* Reserved */
+} HDRDPX_INDUSTRYFILMINFOHEADER;
+
+typedef struct _HDRDPX_IndustryTelevisionInfoHeader
+{
+	DWORD  TimeCode;         /* SMPTE time code */
+	DWORD  UserBits;         /* SMPTE user bits */
+	BYTE   Interlace;        /* Interlace */
+	BYTE   FieldNumber;      /* Field number */
+	BYTE   VideoSignal;      /* Video signal standard */
+	BYTE   Padding;          /* Structure alignment padding */
+	SINGLE HorzSampleRate;   /* Horizontal sample rate in Hz */
+	SINGLE VertSampleRate;   /* Vertical sample rate in Hz */
+	SINGLE FrameRate;        /* Temporal sampling rate or frame rate in Hz */
+	SINGLE TimeOffset;       /* time offset from sync to first pixel */
+	SINGLE Gamma;            /* gamma value */
+	SINGLE BlackLevel;       /* Black level code value */
+	SINGLE BlackGain;        /* Black gain */
+	SINGLE Breakpoint;       /* Breakpoint */
+	SINGLE WhiteLevel;       /* Reference white level code value */
+	SINGLE IntegrationTimes; /* Integration time(s) */
+	BYTE   VideoIdentificationCode; /* Video Identification Code (field 74.1) */
+	BYTE   SMPTETCType;      /* SMPTE time code type (field 74.2) */
+	BYTE   SMPTETCDBB2;		 /* SMPTE time code DBB2 value (field 74.3) */
+	BYTE   Reserved74_4;     /* Reserved (field 74.4) */
+	BYTE   Reserved74_5[72];  /* Reserved (field 74.5) */
+} HDRDPX_INDUSTRYTELEVISIONINFOHEADER;
+
+typedef struct _HdrDpxFileFormat
+{
+	HDRDPX_GENERICFILEHEADER            FileHeader;
+	HDRDPX_GENERICIMAGEHEADER           ImageHeader;
+	HDRDPX_GENERICSOURCEINFOHEADER      SourceInfoHeader;
+	HDRDPX_INDUSTRYFILMINFOHEADER       FilmHeader;
+	HDRDPX_INDUSTRYTELEVISIONINFOHEADER TvHeader;
+} HDRDPXFILEFORMAT;
+
+typedef struct _HdrDpxUserData
+{
+	char     UserIdentification[32];	/* User identification */
+	uint8_t *UserData;		/* User data */
+} HDRDPXUSERDATA;
+
+typedef struct _HdrDpxSbmData
+{
+	char 		SbmFormatDescriptor[128];	/* SBM format decriptor */
+	uint32_t	SbmLength;					/* Length of data that follows */
+	uint8_t		*SbmData;			/* Standards-based metadata */
+} HDRDPXSBMDATA;
 
 typedef union _datum
 {
@@ -206,7 +349,7 @@ namespace Dpx {
 	{
 		eFieldNumber
 	};
-	
+
 	enum HdrDpxFieldsDittoKey
 	{
 		eDittoKey
@@ -246,7 +389,7 @@ namespace Dpx {
 	{
 		eBitDepth
 	};
-	
+
 	enum HdrDpxFieldsPacking
 	{
 		ePacking
@@ -275,6 +418,11 @@ namespace Dpx {
 	enum HdrDpxFieldsByteOrder
 	{
 		eByteOrder
+	};
+
+	enum HdrDpxFieldsColorDifferenceSiting
+	{
+		eColorDifferenceSiting
 	};
 
 	/* enum HdrDpxFields
@@ -467,7 +615,7 @@ namespace Dpx {
 		eTransferBT_2100_PQ_CI = 18,
 		eTransferBT_2100_HLG_NCL = 19,
 		eTransferBT_2100_HLG_CI = 20,
-		eTransferRP_231_2 = 21,
+		eTransferRP_431_2 = 21,
 		eTransferIEC_61966_2_1 = 22,
 		eTransferUndefined = UINT8_MAX
 	};
@@ -486,7 +634,7 @@ namespace Dpx {
 		eColorimetricCompositePAL = 10,
 		eColorimetricNA_11 = 11,
 		eColorimetricNA_12 = 12,
-		eColorimetricST2065_3 = 13,
+		eColorimetricST_2065_3 = 13,
 		eColorimetricBT_2020 = 14,
 		eColorimetricST_2113_P3D65 = 15,
 		eColorimetricST_2113_P3DCI = 16,
@@ -705,358 +853,156 @@ namespace Dpx {
 		eVIC_undefined = UINT8_MAX
 	};
 
-	enum ErrorSeverity
+	enum HdrDpxColorDifferenceSiting
 	{
-		eInformational,
-		eWarning,
-		eFatal
+		eSitingCositedHCositedV = 0,
+		eSitingInterstitialHCositedV = 1,
+		eSitingCositedHinterstitialV = 2,
+		eSitingInterstitialHInterstitialV = 3,
+		eSitingUndefined = 15
 	};
 
-	enum ErrorCode
-	{
-		eNoError = 0,
-		eValidationError,
-		eMissingCoreField,
-		eUnexpectedNonzeroBit,
-		eFileOpenError,
-		eFileReadError,
-		eFileWriteError,
-		eBadParameter
-	};
-
-	class ErrorObject
+	class PixelArray
 	{
 	public:
-		explicit operator bool() const {  // Makes return object testable
-			return (m_code.size() != 0);
-		}
-		ErrorObject operator + (ErrorObject const &obj)   // Combine the errors from 2 objects
-		{
-			ErrorObject err;
-			Dpx::ErrorCode code;
-			Dpx::ErrorSeverity severity;
-			std::string message;
-			int i;
+		virtual void Allocate(uint32_t w, uint32_t h, bool issigned, uint8_t bits, std::vector<DatumLabel> components) = 0;
+		virtual void SetComponent(DatumLabel c, int x, int y, int32_t d) = 0;
+		virtual void SetComponent(DatumLabel c, int x, int y, float d) = 0;
+		virtual void SetComponent(DatumLabel c, int x, int y, double d) = 0;
+		virtual void GetComponent(DatumLabel c, int x, int y, int32_t &d) = 0;
+		virtual void GetComponent(DatumLabel c, int x, int y, float &d) = 0;
+		virtual void GetComponent(DatumLabel c, int x, int y, double &d) = 0;
+		virtual bool IsOk(void) = 0;
+		virtual Dpx::ErrorObject GetErrors() = 0;
+	};
 
-			for (i=0; i<GetNumErrors(); ++i)
-			{
-				GetError(i, code, severity, message);
-				err.LogError(code, severity, message);
-			}
-			for (i = 0; i < obj.GetNumErrors(); ++i)
-			{
-				obj.GetError(i, code, severity, message);
-				err.LogError(code, severity, message);
-			}
-			return err;
-		}
-		ErrorObject& operator += (ErrorObject const &obj)
-		{
-			Dpx::ErrorCode code;
-			Dpx::ErrorSeverity severity;
-			std::string message;
-			int i;
+	class HdrDpxFile;
+	class PixelArrayContainer
+	{
+	public:
+		virtual void HeaderCallback(HDRDPXFILEFORMAT &header) = 0;
+		virtual std::shared_ptr<PixelArray> GetPixelArray(int ie) = 0;
+	};
 
-			for (i = 0; i < obj.GetNumErrors(); ++i)
-			{
-				obj.GetError(i, code, severity, message);
-				this->LogError(code, severity, message);
-			}
-			return *this;
-		}
-		void LogError(Dpx::ErrorCode errorcode, Dpx::ErrorSeverity severity, std::string errmsg)
-		{
-			m_code.push_back(errorcode);
-			m_severity.push_back(severity);
-			m_message.push_back(errmsg);
-			if (severity > m_worst_severity)
-				m_worst_severity = severity;
-		}
-		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
-		{
-			if (index >= m_code.size())
-			{
-				errcode = eNoError;
-				errmsg = "";
-				return;
-			}
-			errcode = m_code[index];
-			severity = m_severity[index];
-			errmsg = m_message[index];
-		}
-		int GetNumErrors() const
-		{
-			return static_cast<int>(m_severity.size());
-		}
-		Dpx::ErrorSeverity GetWorstSeverity() const
-		{
-			return m_worst_severity;
-		}
-	private:
-		std::vector<Dpx::ErrorSeverity> m_severity;
-		std::vector<Dpx::ErrorCode> m_code;
-		std::vector<std::string> m_message;
-		Dpx::ErrorSeverity m_worst_severity = Dpx::eInformational;
+
+
+
+	struct SMPTETimeCode
+	{
+		// Each of these fields are actually 4-bits (nibbles)
+		unsigned int h_tens : 4;
+		unsigned int h_units : 4;
+		unsigned int m_tens : 4;
+		unsigned int m_units : 4;
+		unsigned int s_tens : 4;
+		unsigned int s_units : 4;
+		unsigned int F_tens : 4;
+		unsigned int F_units : 4;
+	};
+
+	struct SMPTEUserBits
+	{
+		unsigned int UB7 : 4;  // UB7 => 31:28, UB6 =>27:24, .. UB0 => 3:0
+		unsigned int UB6 : 4;
+		unsigned int UB5 : 4;
+		unsigned int UB4 : 4;
+		unsigned int UB3 : 4;
+		unsigned int UB2 : 4;
+		unsigned int UB1 : 4;
+		unsigned int UB0 : 4;
+	};
+
+	/*
+	struct sHrdDpxDataTypes {
+		HdrDpxFields f;
+		HdrDpxFieldDtypes dt;
+		int sl;   // length for ascii
+	};
+
+
+	sHdrDpxDataTypes hdr_dpx_fields[] =
+	{
+		{ Dpx::eMagic, Dpx::eU32, 0 },
+		{ Dpx::eImageOffset, Dpx::eU32, 0 },
+		{ Dpx::eVersion, Dpx::eASCII, 8 },
+		{ Dpx::eFileSize, Dpx::eU32, 0 },
+		{ Dpx::eDittoKey, Dpx::eU32, 0 },
+		{ Dpx::eGenericSize, Dpx::eU32, 0 },
+		{ Dpx::eIndustrySize, Dpx::eU32, 0 },
+		{ Dpx::eUserSize, Dpx::eU32, 0 },
+		{ Dpx::eFileName, Dpx::eASCII, FILE_NAME_SIZE },
+		{ Dpx::eTimeDate, Dpx::eASCII, TIMEDATE_SIZE },
+		{ Dpx::eCreator, Dpx::eASCII, CREATOR_SIZE },
+		{ Dpx::eProject, Dpx::eASCII, PROJECT_SIZE },
+		{ Dpx::eCopyright, Dpx::eASCII, COPYRIGHT_SIZE },
+		{ Dpx::eEncryptKey, Dpx::eU32, 0 },
+		{ Dpx::eStandardsBasedMetadataOffset, Dpx::eU32, 0 },
+		{ Dpx::eDatumMappingDirection, Dpx::eU8, 0 },
+
+		{ Dpx::eOrientation, Dpx::eU16, 0 },
+		{ Dpx::eNumberElements, Dpx::eU16, 0 },
+		{ Dpx::ePixelsPerLine, Dpx::eU32, 0 },
+		{ Dpx::eLinesPerElement, Dpx::eU32, 0 },
+		{ Dpx::eXOffset, Dpx::eU32, 0 },
+		{ Dpx::eYOffset, Dpx::eU32, 0 },
+		{ Dpx::eXCenter, Dpx::eR32, 0 },
+		{ Dpx::eYCenter, Dpx::eR32, 0 },
+		{ Dpx::eXOriginalSize, Dpx::eU32, 0 },
+		{ Dpx::eYOriginalSize, Dpx::eU32, 0 },
+		{ Dpx::eSourceFileName, Dpx::eASCII, FILE_NAME_SIZE },
+		{ Dpx::eSourceTimeDate, Dpx::eASCII, TIMEDATE_SIZE },
+		{ Dpx::eInputName, Dpx::eASCII, INPUTNAME_SIZE },
+		{ Dpx::eInputSN, Dpx::eASCII, INPUTSN_SIZE },
+		{ Dpx::eBorderXL, Dpx::eU16, 0 },
+		{ Dpx::eBorderXR, Dpx::eU16, 0 },
+		{ Dpx::eBorderYT, Dpx::eU16, 0 },
+		{ Dpx::eBorderYB, Dpx::eU16, 0 },
+		{ Dpx::eAspectRatioH, Dpx::eU32, 0 },
+		{ Dpx::eAspectRatioV, Dpx::eU32, 0 },
+
+		{ Dpx::eFilmMfgId, Dpx::eASCII, 2 },
+		{ Dpx::eFilmType, Dpx::eASCII, 2 },
+		{ Dpx::eOffsetPerfs, Dpx::eASCII, 4 },
+		{ Dpx::ePrefix, Dpx::eASCII, 6 },
+		{ Dpx::eCount, Dpx::eASCII, 4 },
+		{ Dpx::eFormat, Dpx::eASCII, 32 },
+		{ Dpx::eFramePosition, Dpx::eU32, 0 },
+		{ Dpx::eSequenceLene, Dpx::eU32, 0 },
+		{ Dpx::eHeldCount, Dpx::eU32, 0 },
+		{ Dpx::eFrameRate, Dpx::eR32, 0 },
+		{ Dpx::eShutterAngle, Dpx::eR32, 0 },
+		{ Dpx::eFrameId, Dpx::eASCII, 32 },
+		{ Dpx::eSlateInfo, Dpx::eASCII, 100 },
+
+		{ Dpx::eTimeCode, Dpx:eU32, 0 },
+		{ Dpx::eUserBits, Dpx:eU32, 0 },
+		{ Dpx::eInterlace, Dpx::eU8, 0 },
+		{ Dpx::eFieldNumber, Dpx::eU8, 0 },
+		{ Dpx::eVideoSignal, Dpx::eU8, 0 },
+		{ Dpx::ePadding, Dpx::eU8, 0 },
+		{ Dpx::eHorzSampleRate, Dpx::eR32, 0 },
+		{ Dpx::eVertSampleRate, Dpx::eR32, 0 },
+		{ Dpx::eFrameRate, Dpx::eR32, 0 },
+		{ Dpx::eTimeOffset, Dpx::eR32, 0 },
+		{ Dpx::eGamma, Dpx::eR32, 0 },
+		{ Dpx::eBlackLevel, Dpx::eR32, 0 },
+		{ Dpx::eBlackGain, Dpx::eR32, 0 },
+		{ Dpx::eBreakpoint, Dpx::eR32, 0 },
+		{ Dpx::eWhiteLevel, Dpx::eR32, 0 },
+		{ Dpx::eIntegrationTimes, Dpx::eR32, 0 },
+		{ Dpx::eVideoIdentificationCode, Dpx::eU8, 0 },
+		{ Dpx::eSMPTETCType, Dpx::eU8, 0 },
+		{ Dpx::eSMPTETCDBB2, Dpx::eU8, 0 }
+
+	}; */
+
+
+	struct HdrDpxIEFields
+	{
+		Dpx::HdrDpxOrientation m_orientation = Dpx::eOrientationUndefined;
 	};
 }
 
-
-
-struct SMPTETimeCode
-{
-	// Each of these fields are actually 4-bits (nibbles)
-	unsigned int h_tens : 4;
-	unsigned int h_units : 4;
-	unsigned int m_tens : 4;
-	unsigned int m_units : 4;
-	unsigned int s_tens : 4;
-	unsigned int s_units : 4;
-	unsigned int F_tens : 4;
-	unsigned int F_units : 4;
-};
-
-struct SMPTEUserBits
-{
-	unsigned int UB7 : 4;  // UB7 => 31:28, UB6 =>27:24, .. UB0 => 3:0
-	unsigned int UB6 : 4;
-	unsigned int UB5 : 4;
-	unsigned int UB4 : 4;
-	unsigned int UB3 : 4;
-	unsigned int UB2 : 4;
-	unsigned int UB1 : 4;
-	unsigned int UB0 : 4;
-};
-
-/*
-struct sHrdDpxDataTypes {
-	HdrDpxFields f;
-	HdrDpxFieldDtypes dt;
-	int sl;   // length for ascii
-};
-
-
-sHdrDpxDataTypes hdr_dpx_fields[] =
-{
-	{ Dpx::eMagic, Dpx::eU32, 0 },
-	{ Dpx::eImageOffset, Dpx::eU32, 0 },
-	{ Dpx::eVersion, Dpx::eASCII, 8 },
-	{ Dpx::eFileSize, Dpx::eU32, 0 },
-	{ Dpx::eDittoKey, Dpx::eU32, 0 },
-	{ Dpx::eGenericSize, Dpx::eU32, 0 },
-	{ Dpx::eIndustrySize, Dpx::eU32, 0 },
-	{ Dpx::eUserSize, Dpx::eU32, 0 },
-	{ Dpx::eFileName, Dpx::eASCII, FILE_NAME_SIZE },
-	{ Dpx::eTimeDate, Dpx::eASCII, TIMEDATE_SIZE },
-	{ Dpx::eCreator, Dpx::eASCII, CREATOR_SIZE },
-	{ Dpx::eProject, Dpx::eASCII, PROJECT_SIZE },
-	{ Dpx::eCopyright, Dpx::eASCII, COPYRIGHT_SIZE },
-	{ Dpx::eEncryptKey, Dpx::eU32, 0 },
-	{ Dpx::eStandardsBasedMetadataOffset, Dpx::eU32, 0 },
-	{ Dpx::eDatumMappingDirection, Dpx::eU8, 0 },
-
-	{ Dpx::eOrientation, Dpx::eU16, 0 },
-	{ Dpx::eNumberElements, Dpx::eU16, 0 },
-	{ Dpx::ePixelsPerLine, Dpx::eU32, 0 },
-	{ Dpx::eLinesPerElement, Dpx::eU32, 0 },
-	{ Dpx::eXOffset, Dpx::eU32, 0 },
-	{ Dpx::eYOffset, Dpx::eU32, 0 },
-	{ Dpx::eXCenter, Dpx::eR32, 0 },
-	{ Dpx::eYCenter, Dpx::eR32, 0 },
-	{ Dpx::eXOriginalSize, Dpx::eU32, 0 },
-	{ Dpx::eYOriginalSize, Dpx::eU32, 0 },
-	{ Dpx::eSourceFileName, Dpx::eASCII, FILE_NAME_SIZE },
-	{ Dpx::eSourceTimeDate, Dpx::eASCII, TIMEDATE_SIZE },
-	{ Dpx::eInputName, Dpx::eASCII, INPUTNAME_SIZE },
-	{ Dpx::eInputSN, Dpx::eASCII, INPUTSN_SIZE },
-	{ Dpx::eBorderXL, Dpx::eU16, 0 },
-	{ Dpx::eBorderXR, Dpx::eU16, 0 },
-	{ Dpx::eBorderYT, Dpx::eU16, 0 },
-	{ Dpx::eBorderYB, Dpx::eU16, 0 },
-	{ Dpx::eAspectRatioH, Dpx::eU32, 0 },
-	{ Dpx::eAspectRatioV, Dpx::eU32, 0 },
-
-	{ Dpx::eFilmMfgId, Dpx::eASCII, 2 },
-	{ Dpx::eFilmType, Dpx::eASCII, 2 },
-	{ Dpx::eOffsetPerfs, Dpx::eASCII, 4 },
-	{ Dpx::ePrefix, Dpx::eASCII, 6 },
-	{ Dpx::eCount, Dpx::eASCII, 4 },
-	{ Dpx::eFormat, Dpx::eASCII, 32 },
-	{ Dpx::eFramePosition, Dpx::eU32, 0 },
-	{ Dpx::eSequenceLene, Dpx::eU32, 0 },
-	{ Dpx::eHeldCount, Dpx::eU32, 0 },
-	{ Dpx::eFrameRate, Dpx::eR32, 0 },
-	{ Dpx::eShutterAngle, Dpx::eR32, 0 },
-	{ Dpx::eFrameId, Dpx::eASCII, 32 },
-	{ Dpx::eSlateInfo, Dpx::eASCII, 100 },
-	
-	{ Dpx::eTimeCode, Dpx:eU32, 0 },
-	{ Dpx::eUserBits, Dpx:eU32, 0 },
-	{ Dpx::eInterlace, Dpx::eU8, 0 },
-	{ Dpx::eFieldNumber, Dpx::eU8, 0 },
-	{ Dpx::eVideoSignal, Dpx::eU8, 0 },
-	{ Dpx::ePadding, Dpx::eU8, 0 },
-	{ Dpx::eHorzSampleRate, Dpx::eR32, 0 },
-	{ Dpx::eVertSampleRate, Dpx::eR32, 0 },
-	{ Dpx::eFrameRate, Dpx::eR32, 0 },
-	{ Dpx::eTimeOffset, Dpx::eR32, 0 },
-	{ Dpx::eGamma, Dpx::eR32, 0 },
-	{ Dpx::eBlackLevel, Dpx::eR32, 0 },
-	{ Dpx::eBlackGain, Dpx::eR32, 0 },
-	{ Dpx::eBreakpoint, Dpx::eR32, 0 },
-	{ Dpx::eWhiteLevel, Dpx::eR32, 0 },
-	{ Dpx::eIntegrationTimes, Dpx::eR32, 0 },
-	{ Dpx::eVideoIdentificationCode, Dpx::eU8, 0 },
-	{ Dpx::eSMPTETCType, Dpx::eU8, 0 },
-	{ Dpx::eSMPTETCDBB2, Dpx::eU8, 0 }
-
-}; */
-
-
-struct HdrDpxIEFields
-{
-	Dpx::HdrDpxOrientation m_orientation = Dpx::eOrientationUndefined;
-};
-
-typedef struct _HDRDPX_GenericFileHeader
-{
-	DWORD Magic;           /* Magic number */
-	DWORD ImageOffset;     /* Offset to start of image data (bytes) */
-	char Version[8];      /* Version stamp of header format */
-	DWORD FileSize;        /* Total DPX file size (bytes) */
-	DWORD DittoKey;        /* Image content specifier */
-	DWORD GenericSize;     /* Generic section header length (bytes) */
-	DWORD IndustrySize;    /* Industry-specific header length (bytes) */
-	DWORD UserSize;        /* User-defined data length (bytes) */
-	char FileName[FILE_NAME_SIZE];   /* Name of DPX file */
-	char TimeDate[TIMEDATE_SIZE];    /* Time & date of file creation */
-	char Creator[CREATOR_SIZE];    /* Name of file creator */
-	char Project[PROJECT_SIZE];    /* Name of project */
-	char Copyright[COPYRIGHT_SIZE];  /* Copyright information */
-	DWORD EncryptKey;      /* Encryption key */
-	DWORD StandardsBasedMetadataOffset; /* Standards-based metadata offset */
-	BYTE  DatumMappingDirection;  /* Datum mapping direction */
-	BYTE  Reserved16_3;    /* Reserved field 16.3 */
-	WORD  Reserved16_4;	   /* Reserved field 16.4 */
-	BYTE  Reserved16_5[96];   /* Reserved field 16.5 */
-} HDRDPX_GENERICFILEHEADER;
-
-typedef union _HDRDPX_HiLoCode
-{
-	SINGLE f;
-	DWORD  d;
-} HDRDPX_HILOCODE;
-
-typedef struct _HDRDPX_ImageElement
-{
-	DWORD  DataSign;          /* Data sign extension */
-	HDRDPX_HILOCODE  LowData;           /* Reference low data code value */
-	SINGLE LowQuantity;       /* reference low quantity represented */
-	HDRDPX_HILOCODE  HighData;          /* Reference high data code value */
-	SINGLE HighQuantity;      /* reference high quantity represented */
-	BYTE   Descriptor;        /* Descriptor for image element */
-	BYTE   Transfer;          /* Transfer characteristics for element */
-	BYTE   Colorimetric;      /* Colorimetric specification for element */
-	BYTE   BitSize;           /* Bit size for element */
-	WORD   Packing;           /* Packing for element */
-	WORD   Encoding;          /* Encoding for element */
-	DWORD  DataOffset;        /* Offset to data of element */
-	DWORD  EndOfLinePadding;  /* End of line padding used in element */
-	DWORD  EndOfImagePadding; /* End of image padding used in element */
-	char   Description[DESCRIPTION_SIZE];   /* Description of element */
-} HDRDPX_IMAGEELEMENT;
-
-typedef struct _HDRDPX_GenericImageHeader
-{
-	WORD         Orientation;        /* Image orientation */
-	WORD         NumberElements;     /* Number of image elements */
-	DWORD        PixelsPerLine;      /* Pixels per line */
-	DWORD        LinesPerElement;    /* Lines per image element */
-	HDRDPX_IMAGEELEMENT ImageElement[NUM_IMAGE_ELEMENTS];
-	DWORD		 ChromaSubsampling;  /* Chroma subsampling descriptor (field 29.1) */
-	BYTE         Reserved[48];       /* Reserved field 29.2 */
-} HDRDPX_GENERICIMAGEHEADER;
-
-typedef struct _HDRDPX_GenericSourceInfoHeader
-{
-	DWORD  XOffset;         /* X offset */
-	DWORD  YOffset;         /* Y offset */
-	SINGLE XCenter;         /* X center */
-	SINGLE YCenter;         /* Y center */
-	DWORD  XOriginalSize;   /* X original size */
-	DWORD  YOriginalSize;   /* Y original size */
-	char SourceFileName[FILE_NAME_SIZE];   /* Source image file name */
-	char SourceTimeDate[TIMEDATE_SIZE];    /* Source image date & time */
-	char InputName[INPUTNAME_SIZE];   /* Input device name */
-	char InputSN[INPUTSN_SIZE];     /* Input device serial number */
-	WORD   Border[4];       /* Border validity (XL, XR, YT, YB) */
-	DWORD  AspectRatio[2];  /* Pixel aspect ratio H:V */
-	BYTE   Reserved[28];    /* Reserved */
-} HDRDPX_GENERICSOURCEINFOHEADER;
-
-typedef struct _HDRDPX_IndustryFilmInfoHeader
-{
-	char FilmMfgId[2];      /* Film manufacturer ID code */
-	char FilmType[2];       /* Film type */
-	char OffsetPerfs[2];    /* Offset in perfs */
-	char Prefix[6];         /* Prefix */
-	char Count[4];          /* Count */
-	char Format[32];        /* Format */
-	DWORD  FramePosition;     /* Frame position in sequence */
-	DWORD  SequenceLen;       /* Sequence length in frames */
-	DWORD  HeldCount;         /* Held count */
-	SINGLE FrameRate;         /* Frame rate of original in frames/sec */
-	SINGLE ShutterAngle;      /* Shutter angle of camera in degrees */
-	char FrameId[32];       /* Frame identification */
-	char SlateInfo[100];    /* Slate information */
-	BYTE   Reserved[56];      /* Reserved */
-} HDRDPX_INDUSTRYFILMINFOHEADER;
-
-typedef struct _HDRDPX_IndustryTelevisionInfoHeader
-{
-	DWORD  TimeCode;         /* SMPTE time code */
-	DWORD  UserBits;         /* SMPTE user bits */
-	BYTE   Interlace;        /* Interlace */
-	BYTE   FieldNumber;      /* Field number */
-	BYTE   VideoSignal;      /* Video signal standard */
-	BYTE   Padding;          /* Structure alignment padding */
-	SINGLE HorzSampleRate;   /* Horizontal sample rate in Hz */
-	SINGLE VertSampleRate;   /* Vertical sample rate in Hz */
-	SINGLE FrameRate;        /* Temporal sampling rate or frame rate in Hz */
-	SINGLE TimeOffset;       /* time offset from sync to first pixel */
-	SINGLE Gamma;            /* gamma value */
-	SINGLE BlackLevel;       /* Black level code value */
-	SINGLE BlackGain;        /* Black gain */
-	SINGLE Breakpoint;       /* Breakpoint */
-	SINGLE WhiteLevel;       /* Reference white level code value */
-	SINGLE IntegrationTimes; /* Integration time(s) */
-	BYTE   VideoIdentificationCode; /* Video Identification Code (field 74.1) */
-	BYTE   SMPTETCType;      /* SMPTE time code type (field 74.2) */
-	BYTE   SMPTETCDBB2;		 /* SMPTE time code DBB2 value (field 74.3) */
-	BYTE   Reserved74_4;     /* Reserved (field 74.4) */
-	BYTE   Reserved74_5[72];  /* Reserved (field 74.5) */
-} HDRDPX_INDUSTRYTELEVISIONINFOHEADER;
-
-typedef struct _HdrDpxFileFormat
-{
-	HDRDPX_GENERICFILEHEADER            FileHeader;
-	HDRDPX_GENERICIMAGEHEADER           ImageHeader;
-	HDRDPX_GENERICSOURCEINFOHEADER      SourceInfoHeader;
-	HDRDPX_INDUSTRYFILMINFOHEADER       FilmHeader;
-	HDRDPX_INDUSTRYTELEVISIONINFOHEADER TvHeader;
-} HDRDPXFILEFORMAT;
-
-typedef struct _HdrDpxUserData
-{
-	char     UserIdentification[32];	/* User identification */
-	uint8_t *UserData;		/* User data */
-} HDRDPXUSERDATA;
-
-typedef struct _HdrDpxSbmData
-{
-	char 		SbmFormatDescriptor[128];	/* SBM format decriptor */
-	uint32_t	SbmLength;					/* Length of data that follows */
-	uint8_t		*SbmData;			/* Standards-based metadata */
-} HDRDPXSBMDATA;
 
 //typedef struct _HdrDpxImageData
 //{
@@ -1069,8 +1015,8 @@ typedef struct _HdrDpxSbmData
 #define UNDEFINED_U8    UINT8_MAX
 
 
-extern format_t determine_field_format(char* file_name);
-extern int      ends_in_percentd(char* str, int length);
+//extern format_t determine_field_format(char* file_name);
+//extern int      ends_in_percentd(char* str, int length);
 
 ////int      hdr_dpx_read(char *fname, pic_t **p, HDRDPXFILEFORMAT *dpxh, HDRDPXUSERDATA *dpxu, HDRDPXSBMDATA *dpxsbm);
 ////int      hdr_dpx_write(char *fname, pic_t *p, HDRDPXFILEFORMAT *dpxh, HDRDPXUSERDATA *dpxu, HDRDPXSBMDATA *dpxsbm, int write_as_be, HDRDPXFILEFORMAT *dpxh_written);
@@ -1080,8 +1026,8 @@ extern int      ends_in_percentd(char* str, int length);
 //int      hdr_dpx_write(char *fname, HDRDPXIMAGEDATA *p, HDRDPXFILEFORMAT *dpxh, HDRDPXUSERDATA *dpxu, HDRDPXSBMDATA *dpxsbm, int write_as_be, HDRDPXFILEFORMAT *dpxh_written);
 //int		 hdr_dpx_determine_file_type(char *fname);  // returns: -1 = error, 1 = V1.0, 2 = V2.0, 3 = V2.0HDR
 
-void print_hdrdpx_header(FILE *fp, char *fname, HDRDPXFILEFORMAT *dpx_file, HDRDPXUSERDATA *dpx_u, HDRDPXSBMDATA *dpx_sbm);
-inline void hdr_dpx_copy_string_n(char *dest, char *src, int n);
+//void print_hdrdpx_header(FILE *fp, char *fname, HDRDPXFILEFORMAT *dpx_file, HDRDPXUSERDATA *dpx_u, HDRDPXSBMDATA *dpx_sbm);
+//inline void hdr_dpx_copy_string_n(char *dest, char *src, int n);
 
 //// Example calling sequence for HDR DPX read:
 //
@@ -1144,183 +1090,191 @@ inline void hdr_dpx_copy_string_n(char *dest, char *src, int n);
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class HdrDpxImageElement
-{
-public:
-	~HdrDpxImageElement();
-
-	// Writing functions:
-	HdrDpxImageElement(uint32_t width, uint32_t height, Dpx::HdrDpxDescriptor desc, int8_t bpc);
-	void AddPlane(DatumLabel dtype);
-	void SetPixelI(int x, int y, DatumLabel dtype, int32_t d);
-	void SetPixelLf(int x, int y, DatumLabel dtype, double d);
-
-	void SetHeader(Dpx::HdrDpxIEFieldsU32 f, uint32_t d);
-	void SetHeader(Dpx::HdrDpxIEFieldsR32 f, float d);
-	void SetHeader(Dpx::HdrDpxFieldsDataSign f, Dpx::HdrDpxDataSign d);
-	void SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDescriptor d);
-	void SetHeader(Dpx::HdrDpxFieldsTransfer f, Dpx::HdrDpxTransfer d);
-	void SetHeader(Dpx::HdrDpxFieldsColorimetric f, Dpx::HdrDpxColorimetric d);
-	void SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDepth d);
-	void SetHeader(Dpx::HdrDpxFieldsPacking f, Dpx::HdrDpxPacking d);
-	void SetHeader(Dpx::HdrDpxFieldsEncoding f, Dpx::HdrDpxEncoding d);
-
-	// Reading functions:
-	HdrDpxImageElement(void);
-	uint32_t GetWidth(void);
-	uint32_t GetHeight(void);
-
-	int32_t GetPixelI(int x, int y, DatumLabel dtype);
-	double GetPixelLf(int x, int y, DatumLabel dtype);
-	
-	uint32_t GetHeader(Dpx::HdrDpxIEFieldsU32 f);
-	float GetHeader(Dpx::HdrDpxIEFieldsR32 f);
-	Dpx::HdrDpxDataSign GetHeader(Dpx::HdrDpxFieldsDataSign f);
-	Dpx::HdrDpxDescriptor GetHeader(Dpx::HdrDpxFieldsDescriptor f);
-	Dpx::HdrDpxTransfer GetHeader(Dpx::HdrDpxFieldsTransfer f);
-	Dpx::HdrDpxColorimetric GetHeader(Dpx::HdrDpxFieldsColorimetric f);
-	Dpx::HdrDpxBitDepth GetHeader(Dpx::HdrDpxFieldsBitDepth f);
-	Dpx::HdrDpxPacking GetHeader(Dpx::HdrDpxFieldsPacking f);
-	Dpx::HdrDpxEncoding GetHeader(Dpx::HdrDpxFieldsEncoding f);
-
-	std::vector<DatumLabel> GetDatumLabels(void);
-	std::string DatumLabelToName(DatumLabel dl);
-	std::vector<std::string> GetChannelList();
-	std::list<std::string> GetErrorList();
-	std::list<std::string> GetWarningList();
-
-	bool m_isinitialized = false;
-
-private:
-	friend class HdrDpxFile;
-	///////////////////////////////////////// called from HdrDpxFile class:
-	HdrDpxImageElement(HDRDPXFILEFORMAT header, int ie);
-	Dpx::ErrorObject ReadImageData(std::ifstream &infile, bool direction_r2l, bool bswap);
-	Dpx::ErrorObject WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap);
-	void WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, std::ofstream &ofile);
-	void WriteDatum(Fifo *fifo, int32_t datum, std::ofstream &ofile);
-	void WriteFlush(Fifo *fifo, std::ofstream &ofile);
-	void WriteLineEnd(Fifo *fifo, std::ofstream &ofile);
-	bool IsNextSame(uint32_t xpos, uint32_t ypos);
-
-	void ResetWarnings(void);
-	HDRDPX_IMAGEELEMENT m_dpx_imageelement;  // Header data structure
-
-	void CompileDatumPlanes(void);
-
-	uint32_t ComputeWidth(uint32_t w);
-	uint32_t ComputeHeight(uint32_t h);
-	int GetNumberOfComponents(void);
-	uint32_t m_width;
-	uint32_t m_height;
-	int m_bpc;
-	Dpx::HdrDpxDescriptor m_descriptor;
-	DatumDType m_datum_type;
-	std::vector<std::shared_ptr<DatumPlane>> m_planes;
-	bool m_h_subsampled;
-	bool m_v_subsampled;
-	std::shared_ptr<Fifo> m_fifoptr;
-	bool m_byte_swap;
-	bool m_direction_r2l;
-
-	std::list<std::string> m_warnings;
-	bool m_warn_unexpected_nonzero_data_bits;
-	uint32_t m_warn_image_data_word_mask;
-	bool m_warn_rle_same_past_eol;
-	bool m_warn_rle_diff_past_eol;
-	bool m_warn_zero_run_length;
-};
-
-class HdrDpxFile
-{
-public:
-	HdrDpxFile(std::string filename);
-	HdrDpxFile();
-	~HdrDpxFile();
-	Dpx::ErrorObject Open(std::string filename);
-	Dpx::ErrorObject WriteFile(std::string filename);
-	std::string DumpHeader();
-	Dpx::ErrorObject Validate();
-	bool IsHdr();
-	std::shared_ptr<HdrDpxImageElement> CreateImageElement(uint32_t width, uint32_t height, Dpx::HdrDpxDescriptor desc, int8_t bpc);
-
-	// overloaded functions for header field access
-	// TODO: rename variables
-	void SetHeader(Dpx::HdrDpxFieldsString f, std::string s);
-	std::string GetHeader(Dpx::HdrDpxFieldsString f);
-	void SetHeader(Dpx::HdrDpxFieldsU32 f, uint32_t d);
-	uint32_t GetHeader(Dpx::HdrDpxFieldsU32 f);
-	void SetHeader(Dpx::HdrDpxFieldsU16 f, uint16_t d);
-	uint16_t GetHeader(Dpx::HdrDpxFieldsU16 f);
-	void SetHeader(Dpx::HdrDpxFieldsR32 f, float d);
-	float GetHeader(Dpx::HdrDpxFieldsR32 f);
-	void SetHeader(Dpx::HdrDpxFieldsU8 f, uint8_t d);
-	uint8_t GetHeader(Dpx::HdrDpxFieldsU8 f);
-	void SetHeader(Dpx::HdrDpxFieldsDittoKey f, Dpx::HdrDpxDittoKey d);
-	Dpx::HdrDpxDittoKey GetHeader(Dpx::HdrDpxFieldsDittoKey f);
-	void SetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f, Dpx::HdrDpxDatumMappingDirection d);
-	Dpx::HdrDpxDatumMappingDirection GetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f);
-	void SetHeader(Dpx::HdrDpxFieldsOrientation f, Dpx::HdrDpxOrientation d);
-	Dpx::HdrDpxOrientation GetHeader(Dpx::HdrDpxFieldsOrientation f);
-	void SetHeader(Dpx::HdrDpxFieldsInterlace f, Dpx::HdrDpxInterlace d);
-	Dpx::HdrDpxInterlace GetHeader(Dpx::HdrDpxFieldsInterlace f);
-	void SetHeader(Dpx::HdrDpxFieldsVideoSignal f, Dpx::HdrDpxVideoSignal d);
-	Dpx::HdrDpxVideoSignal GetHeader(Dpx::HdrDpxFieldsVideoSignal f);
-	void SetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f, Dpx::HdrDpxVideoIdentificationCode d);
-	Dpx::HdrDpxVideoIdentificationCode GetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f);
-	void SetHeader(Dpx::HdrDpxFieldsByteOrder f, Dpx::HdrDpxByteOrder d);
-	Dpx::HdrDpxByteOrder GetHeader(Dpx::HdrDpxFieldsByteOrder f);
-
-	std::vector<std::shared_ptr<HdrDpxImageElement>> m_IE;
-	std::list<std::string> GetWarningList();
-
-private:
-	bool CopyStringN(char *dest, std::string src, int l);
-	std::string CopyToStringN(char * src, int l);
-	void ByteSwapHeader(void);
-	void ByteSwapSbmHeader(void);
-	bool ByteSwapToMachine(void);
-	Dpx::ErrorObject ComputeOffsets();
-	Dpx::ErrorObject FillCoreFields();
-	Dpx::ErrorObject CheckDataCollisions(uint32_t *ie_data_block_ends);
-
-	std::list<std::string> m_warn_messages;
-	std::string m_file_name;
-	SMPTETimeCode m_smptetimecode;
-	SMPTEUserBits m_smpteuserbits;
-	bool m_file_is_hdr_version = false;
-	bool m_machine_is_mbsf = false;
-	bool m_sbm_present = false;
-
-	Dpx::HdrDpxByteOrder m_byteorder = Dpx::eNativeByteOrder;
-	Dpx::HdrDpxVersion m_version = Dpx::eDPX_2_0_HDR;
-	Dpx::HdrDpxDittoKey m_dittokey = Dpx::eDittoKeyUndefined;
-	Dpx::HdrDpxDatumMappingDirection m_datummappingdirection = Dpx::eDatumMappingDirectionUndefined;
-	Dpx::HdrDpxInterlace m_interlaced = Dpx::eInterlaceUndefined;
-	Dpx::HdrDpxVideoSignal m_videosignal = Dpx::eVideoSignalUndefined;
-	Dpx::HdrDpxVideoIdentificationCode m_videoidentificationcode = Dpx::eVIC_undefined;
-	HDRDPXFILEFORMAT m_dpx_header;
-	HDRDPXSBMDATA m_dpx_sbmdata;
-	HDRDPXUSERDATA m_dpx_userdata;
-};
+namespace Dpx {
 
 
-// Generic byte swap functions
-static inline void ByteSwap32(void *v)
-{
-	uint8_t *u8;
-	u8 = (uint8_t *)v;
-	std::swap(u8[0], u8[3]);
-	std::swap(u8[1], u8[2]);
+	class HdrDpxImageElement
+	{
+	public:
+		~HdrDpxImageElement();
+
+		// Writing functions:
+		HdrDpxImageElement(std::shared_ptr<Dpx::PixelArray> &pa, int ie_index, uint32_t width, uint32_t height, Dpx::HdrDpxDescriptor desc, int8_t bpc);
+		void AddPlane(DatumLabel dtype);
+
+		void SetHeader(Dpx::HdrDpxIEFieldsU32 f, uint32_t d);
+		void SetHeader(Dpx::HdrDpxIEFieldsR32 f, float d);
+		void SetHeader(Dpx::HdrDpxFieldsDataSign f, Dpx::HdrDpxDataSign d);
+		void SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDescriptor d);
+		void SetHeader(Dpx::HdrDpxFieldsTransfer f, Dpx::HdrDpxTransfer d);
+		void SetHeader(Dpx::HdrDpxFieldsColorimetric f, Dpx::HdrDpxColorimetric d);
+		void SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDepth d);
+		void SetHeader(Dpx::HdrDpxFieldsPacking f, Dpx::HdrDpxPacking d);
+		void SetHeader(Dpx::HdrDpxFieldsEncoding f, Dpx::HdrDpxEncoding d);
+		void SetHeader(Dpx::HdrDpxFieldsColorDifferenceSiting f, Dpx::HdrDpxColorDifferenceSiting d);
+
+		// Reading functions:
+		uint32_t GetWidth(void);
+		uint32_t GetHeight(void);
+		bool IsFloat(void);
+
+		uint32_t GetHeader(Dpx::HdrDpxIEFieldsU32 f);
+		float GetHeader(Dpx::HdrDpxIEFieldsR32 f);
+		Dpx::HdrDpxDataSign GetHeader(Dpx::HdrDpxFieldsDataSign f);
+		Dpx::HdrDpxDescriptor GetHeader(Dpx::HdrDpxFieldsDescriptor f);
+		Dpx::HdrDpxTransfer GetHeader(Dpx::HdrDpxFieldsTransfer f);
+		Dpx::HdrDpxColorimetric GetHeader(Dpx::HdrDpxFieldsColorimetric f);
+		Dpx::HdrDpxBitDepth GetHeader(Dpx::HdrDpxFieldsBitDepth f);
+		Dpx::HdrDpxPacking GetHeader(Dpx::HdrDpxFieldsPacking f);
+		Dpx::HdrDpxEncoding GetHeader(Dpx::HdrDpxFieldsEncoding f);
+		Dpx::HdrDpxColorDifferenceSiting GetHeader(Dpx::HdrDpxFieldsColorDifferenceSiting f);
+
+		std::vector<DatumLabel> GetDatumLabels(void);
+
+		std::string DatumLabelToName(DatumLabel dl);
+			
+		bool m_isinitialized = false;
+		std::shared_ptr<Dpx::PixelArray> m_pixel_array;
+
+	private:
+		friend class HdrDpxFile;
+		///////////////////////////////////////// called from HdrDpxFile class:
+		HdrDpxImageElement(std::shared_ptr<Dpx::PixelArray> &pa, int ie_index, HDRDPXFILEFORMAT &header);
+		Dpx::ErrorObject ReadImageData(std::ifstream &infile, bool direction_r2l, bool bswap);
+		Dpx::ErrorObject WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap);
+		void WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, std::ofstream &ofile);
+		void WriteDatum(Fifo *fifo, int32_t datum, std::ofstream &ofile);
+		void WriteFlush(Fifo *fifo, std::ofstream &ofile);
+		void WriteLineEnd(Fifo *fifo, std::ofstream &ofile);
+		bool IsNextSame(uint32_t xpos, uint32_t ypos, int32_t pixel[]);
+
+		void ResetWarnings(void);
+		HDRDPX_IMAGEELEMENT m_dpx_imageelement;  // Header data structure
+
+		void CompileDatumPlanes(void);
+
+		uint32_t ComputeWidth(uint32_t w);
+		uint32_t ComputeHeight(uint32_t h);
+		int GetNumberOfComponents(void);
+		uint32_t m_width;
+		uint32_t m_height;
+		int m_bpc;
+		Dpx::HdrDpxDescriptor m_descriptor;
+		std::vector<DatumLabel> m_planes;
+		bool m_h_subsampled;
+		bool m_v_subsampled;
+		std::shared_ptr<Fifo> m_fifoptr;
+		bool m_byte_swap;
+		bool m_direction_r2l;
+
+		std::list<std::string> m_warnings;
+		Dpx::ErrorObject m_err;
+		bool m_warn_unexpected_nonzero_data_bits;
+		uint32_t m_warn_image_data_word_mask;
+		bool m_warn_rle_same_past_eol;
+		bool m_warn_rle_diff_past_eol;
+		bool m_warn_zero_run_length;
+	};
+
+	class HdrDpxFile
+	{
+	public:
+		HdrDpxFile(std::string s, PixelArrayContainer &pac);
+		HdrDpxFile();
+		~HdrDpxFile();
+		friend std::ostream& operator<<(std::ostream & os, const HdrDpxFile &dpxf);
+		void Open(std::string filename, PixelArrayContainer &pac);
+		std::shared_ptr<HdrDpxImageElement> CreateImageElement(std::shared_ptr<PixelArray> pa, int ie_index, uint32_t width, uint32_t height, HdrDpxDescriptor desc, int8_t bpc);
+		void WriteFile(std::string filename);
+		std::string DumpHeader() const;
+		bool Validate();
+		bool IsHdr();
+		bool IsOk();
+		int GetNumErrors();
+		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg);
+		void ClearErrors();
+
+
+		// overloaded functions for header field access
+		// TODO: rename variables
+		void SetHeader(Dpx::HdrDpxFieldsString f, std::string s);
+		std::string GetHeader(Dpx::HdrDpxFieldsString f);
+		void SetHeader(Dpx::HdrDpxFieldsU32 f, uint32_t d);
+		uint32_t GetHeader(Dpx::HdrDpxFieldsU32 f);
+		void SetHeader(Dpx::HdrDpxFieldsU16 f, uint16_t d);
+		uint16_t GetHeader(Dpx::HdrDpxFieldsU16 f);
+		void SetHeader(Dpx::HdrDpxFieldsR32 f, float d);
+		float GetHeader(Dpx::HdrDpxFieldsR32 f);
+		void SetHeader(Dpx::HdrDpxFieldsU8 f, uint8_t d);
+		uint8_t GetHeader(Dpx::HdrDpxFieldsU8 f);
+		void SetHeader(Dpx::HdrDpxFieldsDittoKey f, Dpx::HdrDpxDittoKey d);
+		Dpx::HdrDpxDittoKey GetHeader(Dpx::HdrDpxFieldsDittoKey f);
+		void SetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f, Dpx::HdrDpxDatumMappingDirection d);
+		Dpx::HdrDpxDatumMappingDirection GetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f);
+		void SetHeader(Dpx::HdrDpxFieldsOrientation f, Dpx::HdrDpxOrientation d);
+		Dpx::HdrDpxOrientation GetHeader(Dpx::HdrDpxFieldsOrientation f);
+		void SetHeader(Dpx::HdrDpxFieldsInterlace f, Dpx::HdrDpxInterlace d);
+		Dpx::HdrDpxInterlace GetHeader(Dpx::HdrDpxFieldsInterlace f);
+		void SetHeader(Dpx::HdrDpxFieldsVideoSignal f, Dpx::HdrDpxVideoSignal d);
+		Dpx::HdrDpxVideoSignal GetHeader(Dpx::HdrDpxFieldsVideoSignal f);
+		void SetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f, Dpx::HdrDpxVideoIdentificationCode d);
+		Dpx::HdrDpxVideoIdentificationCode GetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f);
+		void SetHeader(Dpx::HdrDpxFieldsByteOrder f, Dpx::HdrDpxByteOrder d);
+		Dpx::HdrDpxByteOrder GetHeader(Dpx::HdrDpxFieldsByteOrder f);
+
+		std::shared_ptr<HdrDpxImageElement> m_IE[8];
+		bool m_is_IE_initialized[8];
+		std::list<std::string> GetWarningList();
+
+	private:
+		bool CopyStringN(char *dest, std::string src, int l);
+		std::string CopyToStringN(char * src, int l);
+		void ByteSwapHeader(void);
+		void ByteSwapSbmHeader(void);
+		bool ByteSwapToMachine(void);
+		void ComputeOffsets();
+		void FillCoreFields();
+		void CheckDataCollisions(uint32_t *ie_data_block_ends);
+
+		std::list<std::string> m_warn_messages;
+		std::string m_file_name;
+		SMPTETimeCode m_smptetimecode;
+		SMPTEUserBits m_smpteuserbits;
+		bool m_file_is_hdr_version = false;
+		bool m_machine_is_mbsf = false;
+		bool m_sbm_present = false;
+
+		Dpx::HdrDpxByteOrder m_byteorder = Dpx::eNativeByteOrder;
+		Dpx::HdrDpxVersion m_version = Dpx::eDPX_2_0_HDR;
+		Dpx::HdrDpxDittoKey m_dittokey = Dpx::eDittoKeyUndefined;
+		Dpx::HdrDpxDatumMappingDirection m_datummappingdirection = Dpx::eDatumMappingDirectionUndefined;
+		Dpx::HdrDpxInterlace m_interlaced = Dpx::eInterlaceUndefined;
+		Dpx::HdrDpxVideoSignal m_videosignal = Dpx::eVideoSignalUndefined;
+		Dpx::HdrDpxVideoIdentificationCode m_videoidentificationcode = Dpx::eVIC_undefined;
+		HDRDPXFILEFORMAT m_dpx_header;
+		HDRDPXSBMDATA m_dpx_sbmdata;
+		HDRDPXUSERDATA m_dpx_userdata;
+
+		Dpx::ErrorObject m_err;
+	};
+
+
+	// Generic byte swap functions
+	static inline void ByteSwap32(void *v)
+	{
+		uint8_t *u8;
+		u8 = (uint8_t *)v;
+		std::swap(u8[0], u8[3]);
+		std::swap(u8[1], u8[2]);
+	}
+
+	static inline void ByteSwap16(void *v)
+	{
+		uint8_t *u8;
+		u8 = (uint8_t *)v;
+		std::swap(u8[0], u8[1]);
+	}
+
 }
-
-static inline void ByteSwap16(void *v)
-{
-	uint8_t *u8;
-	u8 = (uint8_t *)v;
-	std::swap(u8[0], u8[1]);
-}
-
-
 #endif
 
