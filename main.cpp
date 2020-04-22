@@ -39,7 +39,7 @@
 #include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
-#include "generic_pixel_array.h"
+#include "raw_pixel_array.h"
 #include <iostream>
 
 void example_read(void);
@@ -102,15 +102,15 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
 
-	//example_write();
 	example_read();
+	//example_write();
 
 	release_argn(argc, argn);
 	return(0);
 }
 
 
-void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
+static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
 	Dpx::ErrorCode code;
 	Dpx::ErrorSeverity severity;
@@ -128,9 +128,9 @@ void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 // Example calling sequence for HDR DPX read:
 void example_read()
 {
-	GenericPixelArrayContainer pac;
-	std::string filename("mydpxfile.dpx");
-	Dpx::HdrDpxFile  f(filename, pac);
+	std::string filename("colorbar.dpx");
+	Dpx::HdrDpxFile  f(filename);
+	Dpx::HdrDpxImageElement *ie = f.GetImageElement(0);
 	
 	if (!f.IsOk())   // can't open, unrecognized format
 	{
@@ -151,107 +151,63 @@ void example_read()
 		dump_error_log("Validation errors:\n", f);
 	}
 
-	//std::cout << f;  // Dump header
+	std::cout << f;  // Dump header
 
-	pac.PrintPixels();
-
-}
-
-
-// Simple class to illustrate returning a constant pixel value
-class ConstPixelArray : public Dpx::PixelArray
-{
-public:
-	void Allocate(uint32_t w, uint32_t h, bool issigned, uint8_t bits, std::vector<Dpx::DatumLabel> components) { ; }
-	void SetComponent(Dpx::DatumLabel c, int x, int y, int32_t d) { ; }
-	void SetComponent(Dpx::DatumLabel c, int x, int y, float d) { ; }
-	void SetComponent(Dpx::DatumLabel c, int x, int y, double d) { ; }
-	void GetComponent(Dpx::DatumLabel c, int x, int y, int32_t &d)
+	std::cout << "Component types for image element 0: ";
+	for (auto c : ie->GetDatumLabels())
+		std::cout << ie->DatumLabelToName(c) << " ";
+	std::cout << "\n";
+	for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 	{
-		if (c == Dpx::DATUM_R) d = 50;
-		else if (c == Dpx::DATUM_G) d = 60;
-		else if (c == Dpx::DATUM_B) d = 70;
-		else d = 0;
-	}
-	void GetComponent(Dpx::DatumLabel c, int x, int y, float &d) { ;  }
-	void GetComponent(Dpx::DatumLabel c, int x, int y, double &d) { ; }
-	bool IsOk(void) {
-		return true;
-	}
-	Dpx::ErrorObject GetErrors() {
-		return m_err;
-	}
-
-private:
-	Dpx::ErrorObject m_err;
-};
-
-// Example calling sequence for HDR DPX write (single image element case):
-void example_write()
-{
-	Dpx::ErrorObject err;
-	std::string fname = "mydpxfile.dpx";
-	const int width = 1920, height = 1080;
-	const int bit_depth = 8;
-	//HdrDpxImageElement ie(width, height, Dpx::eDescBGR, 8);  // Single image element with 8-bit components
-	//uint32_t i, j;
-	Dpx::HdrDpxFile dpxf;
-	std::shared_ptr<Dpx::HdrDpxImageElement> ie;
-	std::shared_ptr<ConstPixelArray> pixel_array = static_cast<std::shared_ptr<ConstPixelArray>>(new ConstPixelArray);
-	
-	// accept typed array overload
-	ie = dpxf.CreateImageElement(pixel_array, 0, width, height, Dpx::eDescBGR, bit_depth);
-
-	// Create a picture (planes aren't ordered inside this data structure, so this sequence is arbitrary:)
-	//ie->SetHeader(Dpx::eBitDepth, 8);   // this would be invalid!!
-	//ie->SetHeader(Dpx::eDescriptor, Dpx::eDescBGR);  // this would be invalid!!
-	ie->SetHeader(Dpx::eEncoding, Dpx::eEncodingRLE);
-
-#if 0   // No longer needed
-	for (i = 0; i < ie->GetHeight(); i++)
-	{
-		for (j = 0; j < ie->GetWidth(); j++)
+		if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth32)
 		{
-			if (bit_depth <= 16)  // use data type function?
+			std::vector<float> rowdata;
+			uint32_t rowidx = 0;
+			rowdata.resize(ie->GetRowSizeInBytes());
+			ie->Dpx2AppPixels(row, static_cast<float *>(rowdata.data()));
+			for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 			{
-				ie->SetPixelI(j, i, DATUM_R, 50);  // Set all pixels to R,G,B = (50, 60, 70)
-				ie->SetPixelI(j, i, DATUM_G, 60);
-				ie->SetPixelI(j, i, DATUM_B, 70);
+				std::cout << "(" << x << ", " << row << ") = ";
+				for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+				{
+					std::cout << rowdata[rowidx++] << ",";
+				}
+				std::cout << "\n";
 			}
-			else
+		}
+		else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth64)
+		{
+			std::vector<double> rowdata;
+			uint32_t rowidx = 0;
+			rowdata.resize(ie->GetRowSizeInBytes());
+			ie->Dpx2AppPixels(row, static_cast<double *>(rowdata.data()));
+			for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 			{
-				ie->SetPixelF(j, i, DATUM_R, 0.5);  // Set all pixels to R,G,B = (.5, .6, .7)
-				ie->SetPixelF(j, i, DATUM_G, 0.6);
-				ie->SetPixelF(j, i, DATUM_B, 0.7);
+				std::cout << "(" << x << ", " << row << ") = ";
+				for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+				{
+					std::cout << rowdata[rowidx++] << ",";
+				}
+				std::cout << "\n";
+			}
+		}
+		else 
+		{
+			std::vector<int32_t> rowdata;
+			int32_t rowidx = 0;
+			rowdata.resize(ie->GetRowSizeInBytes());
+			ie->Dpx2AppPixels(row, static_cast<int32_t *>(rowdata.data()));
+			for (uint32_t x = 0; x < ie->GetWidth(); ++x)
+			{
+				std::cout << "(" << x << ", " << row << ") = ";
+				for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+				{
+					std::cout << rowdata[rowidx++] << ",";
+				}
+				std::cout << rowdata[rowidx++] << "\n";
 			}
 		}
 	}
-#endif 
-
-	// Create 2nd IE (TBD)
-
-	// Metadata fields can be set at any point
-	ie->SetHeader(Dpx::eColorimetric, Dpx::eColorimetricBT_709);
-
-	// Set header values as desired (defaults assumed based on image element structure)
-	dpxf.SetHeader(Dpx::eCopyright, "(C) 2019 XYZ Productions");  // Key is a string, value matches data type
-	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
-	if (dpxf.Validate())
-	{
-		dump_error_log("Validation errors:\n", dpxf);
-	}
-
-	// Write the file
-	dpxf.WriteFile(fname);
-	if (!dpxf.IsOk())
-	{
-		dump_error_log("File write message log:\n", dpxf);
-	}
+	f.Close();
 }
 
-/*
-std::ostream& operator<< (std::ostream& s, const Pixel3& rgb)
-{
-	return s << "{" << rgb.r << "," << rgb.g << "," << rgb.b << "}";
-}
-*/

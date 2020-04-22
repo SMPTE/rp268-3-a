@@ -44,8 +44,11 @@
 #include "datum.h"
 #include "fifo.h"
 #include "hdr_dpx_error.h"
+#include "file_map.h"
 
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
+
+#define RLE_MARGIN   0.1     // 0.1 = 10% margin means we assume that in the worst case an RLE image element might be 10% bigger than uncompressed
 
 #ifndef DPX_H
 #define DPX_ERROR_UNRECOGNIZED_CHROMA  -1
@@ -655,7 +658,7 @@ namespace Dpx {
 	};
 
 	enum HdrDpxPacking {
-		ePackingPacking = 0,
+		ePackingPacked = 0,
 		ePackingFilledMethodA = 1,
 		ePackingFilledMethodB = 2,
 		ePackingUndefined = UINT16_MAX
@@ -862,30 +865,6 @@ namespace Dpx {
 		eSitingUndefined = 15
 	};
 
-	class PixelArray
-	{
-	public:
-		virtual void Allocate(uint32_t w, uint32_t h, bool issigned, uint8_t bits, std::vector<DatumLabel> components) = 0;
-		virtual void SetComponent(DatumLabel c, int x, int y, int32_t d) = 0;
-		virtual void SetComponent(DatumLabel c, int x, int y, float d) = 0;
-		virtual void SetComponent(DatumLabel c, int x, int y, double d) = 0;
-		virtual void GetComponent(DatumLabel c, int x, int y, int32_t &d) = 0;
-		virtual void GetComponent(DatumLabel c, int x, int y, float &d) = 0;
-		virtual void GetComponent(DatumLabel c, int x, int y, double &d) = 0;
-		virtual bool IsOk(void) = 0;
-		virtual Dpx::ErrorObject GetErrors() = 0;
-	};
-
-	class HdrDpxFile;
-	class PixelArrayContainer
-	{
-	public:
-		virtual void HeaderCallback(HDRDPXFILEFORMAT &header) = 0;
-		virtual std::shared_ptr<PixelArray> GetPixelArray(int ie) = 0;
-	};
-
-
-
 
 	struct SMPTETimeCode
 	{
@@ -999,7 +978,7 @@ namespace Dpx {
 
 	struct HdrDpxIEFields
 	{
-		Dpx::HdrDpxOrientation m_orientation = Dpx::eOrientationUndefined;
+		HdrDpxOrientation m_orientation = eOrientationUndefined;
 	};
 }
 
@@ -1092,6 +1071,9 @@ namespace Dpx {
 
 namespace Dpx {
 
+	std::vector<DatumLabel> DescriptorToDatumList(uint8_t desc);
+
+	class HdrDpxFile;
 
 	class HdrDpxImageElement
 	{
@@ -1099,76 +1081,102 @@ namespace Dpx {
 		~HdrDpxImageElement();
 
 		// Writing functions:
-		HdrDpxImageElement(std::shared_ptr<Dpx::PixelArray> &pa, int ie_index, uint32_t width, uint32_t height, Dpx::HdrDpxDescriptor desc, int8_t bpc);
-		void AddPlane(DatumLabel dtype);
+		void Dpx2AppPixels(uint32_t row, int32_t *d);
+		void Dpx2AppPixels(uint32_t row, float *d);
+		void Dpx2AppPixels(uint32_t row, double *d);
 
-		void SetHeader(Dpx::HdrDpxIEFieldsU32 f, uint32_t d);
-		void SetHeader(Dpx::HdrDpxIEFieldsR32 f, float d);
-		void SetHeader(Dpx::HdrDpxFieldsDataSign f, Dpx::HdrDpxDataSign d);
-		void SetHeader(Dpx::HdrDpxFieldsDescriptor f, Dpx::HdrDpxDescriptor d);
-		void SetHeader(Dpx::HdrDpxFieldsTransfer f, Dpx::HdrDpxTransfer d);
-		void SetHeader(Dpx::HdrDpxFieldsColorimetric f, Dpx::HdrDpxColorimetric d);
-		void SetHeader(Dpx::HdrDpxFieldsBitDepth f, Dpx::HdrDpxBitDepth d);
-		void SetHeader(Dpx::HdrDpxFieldsPacking f, Dpx::HdrDpxPacking d);
-		void SetHeader(Dpx::HdrDpxFieldsEncoding f, Dpx::HdrDpxEncoding d);
-		void SetHeader(Dpx::HdrDpxFieldsColorDifferenceSiting f, Dpx::HdrDpxColorDifferenceSiting d);
+		void SetHeader(HdrDpxIEFieldsU32 f, uint32_t d);
+		void SetHeader(HdrDpxIEFieldsR32 f, float d);
+		void SetHeader(HdrDpxFieldsDataSign f, HdrDpxDataSign d);
+		void SetHeader(HdrDpxFieldsDescriptor f, HdrDpxDescriptor d);
+		void SetHeader(HdrDpxFieldsTransfer f, HdrDpxTransfer d);
+		void SetHeader(HdrDpxFieldsColorimetric f, HdrDpxColorimetric d);
+		void SetHeader(HdrDpxFieldsBitDepth f, HdrDpxBitDepth d);
+		void SetHeader(HdrDpxFieldsPacking f, HdrDpxPacking d);
+		void SetHeader(HdrDpxFieldsEncoding f, HdrDpxEncoding d);
+		void SetHeader(HdrDpxFieldsColorDifferenceSiting f, HdrDpxColorDifferenceSiting d);
 
 		// Reading functions:
+		void App2DpxPixels(uint32_t row, int32_t *d);
+		void App2DpxPixels(uint32_t row, float *d);
+		void App2DpxPixels(uint32_t row, double *d);
 		uint32_t GetWidth(void);
 		uint32_t GetHeight(void);
-		bool IsFloat(void);
+		uint32_t GetRowSizeInBytes(bool include_padding = false);
 
-		uint32_t GetHeader(Dpx::HdrDpxIEFieldsU32 f);
-		float GetHeader(Dpx::HdrDpxIEFieldsR32 f);
-		Dpx::HdrDpxDataSign GetHeader(Dpx::HdrDpxFieldsDataSign f);
-		Dpx::HdrDpxDescriptor GetHeader(Dpx::HdrDpxFieldsDescriptor f);
-		Dpx::HdrDpxTransfer GetHeader(Dpx::HdrDpxFieldsTransfer f);
-		Dpx::HdrDpxColorimetric GetHeader(Dpx::HdrDpxFieldsColorimetric f);
-		Dpx::HdrDpxBitDepth GetHeader(Dpx::HdrDpxFieldsBitDepth f);
-		Dpx::HdrDpxPacking GetHeader(Dpx::HdrDpxFieldsPacking f);
-		Dpx::HdrDpxEncoding GetHeader(Dpx::HdrDpxFieldsEncoding f);
-		Dpx::HdrDpxColorDifferenceSiting GetHeader(Dpx::HdrDpxFieldsColorDifferenceSiting f);
+		uint32_t GetHeader(HdrDpxIEFieldsU32 f);
+		float GetHeader(HdrDpxIEFieldsR32 f);
+		HdrDpxDataSign GetHeader(HdrDpxFieldsDataSign f);
+		HdrDpxDescriptor GetHeader(HdrDpxFieldsDescriptor f);
+		HdrDpxTransfer GetHeader(HdrDpxFieldsTransfer f);
+		HdrDpxColorimetric GetHeader(HdrDpxFieldsColorimetric f);
+		HdrDpxBitDepth GetHeader(HdrDpxFieldsBitDepth f);
+		HdrDpxPacking GetHeader(HdrDpxFieldsPacking f);
+		HdrDpxEncoding GetHeader(HdrDpxFieldsEncoding f);
+		HdrDpxColorDifferenceSiting GetHeader(HdrDpxFieldsColorDifferenceSiting f);
 
 		std::vector<DatumLabel> GetDatumLabels(void);
-
-		std::string DatumLabelToName(DatumLabel dl);
-			
-		bool m_isinitialized = false;
-		std::shared_ptr<Dpx::PixelArray> m_pixel_array;
+		uint8_t GetNumberOfComponents(void);
+		std::string DatumLabelToName(Dpx::DatumLabel dl);
 
 	private:
 		friend class HdrDpxFile;
+		HdrDpxImageElement();
 		///////////////////////////////////////// called from HdrDpxFile class:
-		HdrDpxImageElement(std::shared_ptr<Dpx::PixelArray> &pa, int ie_index, HDRDPXFILEFORMAT &header);
-		Dpx::ErrorObject ReadImageData(std::ifstream &infile, bool direction_r2l, bool bswap);
-		Dpx::ErrorObject WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap);
-		void WritePixel(Fifo *fifo, uint32_t xpos, uint32_t ypos, std::ofstream &ofile);
-		void WriteDatum(Fifo *fifo, int32_t datum, std::ofstream &ofile);
-		void WriteFlush(Fifo *fifo, std::ofstream &ofile);
-		void WriteLineEnd(Fifo *fifo, std::ofstream &ofile);
-		bool IsNextSame(uint32_t xpos, uint32_t ypos, int32_t pixel[]);
+		HdrDpxImageElement(uint8_t ie_index, std::fstream *fstream_ptr, HDRDPXFILEFORMAT *dpxf_ptr, FileMap *file_map_ptr);
+		void Initialize(uint8_t ie_index, std::fstream *fstream_ptr, HDRDPXFILEFORMAT *dpxie_ptr, FileMap *file_map_ptr);
+		void LockHeader();
+		void UnlockHeader();
+		void OpenForReading(bool bswap);
+		void OpenForWriting(bool bswap);
+		//ErrorObject ReadImageData(std::ifstream &infile, bool direction_r2l, bool bswap);
+		//ErrorObject WriteImageData(std::ofstream &outfile, bool direction_r2l, bool bswap);
+
+		// Internal functions
+		void WritePixel(Fifo *fifo, uint32_t xpos);
+		void WriteDatum(Fifo *fifo, int32_t datum);
+		void WriteFlush(Fifo *fifo);
+		void WriteLineEnd(Fifo *fifo);
+		bool IsNextSame(uint32_t xpos, int32_t pixel[]);
 
 		void ResetWarnings(void);
-		HDRDPX_IMAGEELEMENT m_dpx_imageelement;  // Header data structure
 
-		void CompileDatumPlanes(void);
+
+		// Pointers back to HdrDpxFile
+		HDRDPXFILEFORMAT *m_dpx_hdr_ptr;
+		HDRDPX_IMAGEELEMENT *m_dpx_ie_ptr;  // Header data structure
+		std::fstream *m_filestream_ptr;
+		FileMap *m_file_map_ptr;
+
+		uint32_t GetOffsetForRow(uint32_t row);
+		void ReadRow(uint32_t row);
+		void WriteRow(uint32_t row);
+		uint32_t BytesUsed(void);
 
 		uint32_t ComputeWidth(uint32_t w);
 		uint32_t ComputeHeight(uint32_t h);
-		int GetNumberOfComponents(void);
+		
 		uint32_t m_width;
 		uint32_t m_height;
-		int m_bpc;
-		Dpx::HdrDpxDescriptor m_descriptor;
-		std::vector<DatumLabel> m_planes;
-		bool m_h_subsampled;
-		bool m_v_subsampled;
-		std::shared_ptr<Fifo> m_fifoptr;
 		bool m_byte_swap;
 		bool m_direction_r2l;
-
 		std::list<std::string> m_warnings;
-		Dpx::ErrorObject m_err;
+		ErrorObject m_err;
+
+		uint8_t m_ie_index = 0xff;
+		float *m_float_row;
+		double *m_double_row;
+		int32_t *m_int_row;
+		uint32_t m_row_rd_idx;
+		bool m_is_open_for_write;
+		bool m_is_open_for_read;
+		bool m_is_header_locked = false;
+		bool m_isinitialized = false;
+		uint32_t m_previous_row;
+		uint32_t m_previous_file_offset;
+		bool m_is_h_subsampled;
+		bool m_is_v_subsampled;
+
 		bool m_warn_unexpected_nonzero_data_bits;
 		uint32_t m_warn_image_data_word_mask;
 		bool m_warn_rle_same_past_eol;
@@ -1179,54 +1187,59 @@ namespace Dpx {
 	class HdrDpxFile
 	{
 	public:
-		HdrDpxFile(std::string s, PixelArrayContainer &pac);
-		HdrDpxFile();
+		HdrDpxFile(); 
+		HdrDpxFile(std::string filename);			// Shortcut to read a file
 		~HdrDpxFile();
-		friend std::ostream& operator<<(std::ostream & os, const HdrDpxFile &dpxf);
-		void Open(std::string filename, PixelArrayContainer &pac);
-		std::shared_ptr<HdrDpxImageElement> CreateImageElement(std::shared_ptr<PixelArray> pa, int ie_index, uint32_t width, uint32_t height, HdrDpxDescriptor desc, int8_t bpc);
+		friend std::ostream& operator<<(std::ostream & os, const HdrDpxFile &dpxf)
+		{
+			os << dpxf.DumpHeader();
+			return os;
+		}
+		void ReadFile(std::string filename);
+		void Close();
 		void WriteFile(std::string filename);
 		std::string DumpHeader() const;
 		bool Validate();
 		bool IsHdr();
 		bool IsOk();
 		int GetNumErrors();
-		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg);
+		void GetError(int index, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg);
 		void ClearErrors();
-
+		uint8_t GetActiveIE();
 
 		// overloaded functions for header field access
 		// TODO: rename variables
-		void SetHeader(Dpx::HdrDpxFieldsString f, std::string s);
-		std::string GetHeader(Dpx::HdrDpxFieldsString f);
-		void SetHeader(Dpx::HdrDpxFieldsU32 f, uint32_t d);
-		uint32_t GetHeader(Dpx::HdrDpxFieldsU32 f);
-		void SetHeader(Dpx::HdrDpxFieldsU16 f, uint16_t d);
-		uint16_t GetHeader(Dpx::HdrDpxFieldsU16 f);
-		void SetHeader(Dpx::HdrDpxFieldsR32 f, float d);
-		float GetHeader(Dpx::HdrDpxFieldsR32 f);
-		void SetHeader(Dpx::HdrDpxFieldsU8 f, uint8_t d);
-		uint8_t GetHeader(Dpx::HdrDpxFieldsU8 f);
-		void SetHeader(Dpx::HdrDpxFieldsDittoKey f, Dpx::HdrDpxDittoKey d);
-		Dpx::HdrDpxDittoKey GetHeader(Dpx::HdrDpxFieldsDittoKey f);
-		void SetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f, Dpx::HdrDpxDatumMappingDirection d);
-		Dpx::HdrDpxDatumMappingDirection GetHeader(Dpx::HdrDpxFieldsDatumMappingDirection f);
-		void SetHeader(Dpx::HdrDpxFieldsOrientation f, Dpx::HdrDpxOrientation d);
-		Dpx::HdrDpxOrientation GetHeader(Dpx::HdrDpxFieldsOrientation f);
-		void SetHeader(Dpx::HdrDpxFieldsInterlace f, Dpx::HdrDpxInterlace d);
-		Dpx::HdrDpxInterlace GetHeader(Dpx::HdrDpxFieldsInterlace f);
-		void SetHeader(Dpx::HdrDpxFieldsVideoSignal f, Dpx::HdrDpxVideoSignal d);
-		Dpx::HdrDpxVideoSignal GetHeader(Dpx::HdrDpxFieldsVideoSignal f);
-		void SetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f, Dpx::HdrDpxVideoIdentificationCode d);
-		Dpx::HdrDpxVideoIdentificationCode GetHeader(Dpx::HdrDpxFieldsVideoIdentificationCode f);
-		void SetHeader(Dpx::HdrDpxFieldsByteOrder f, Dpx::HdrDpxByteOrder d);
-		Dpx::HdrDpxByteOrder GetHeader(Dpx::HdrDpxFieldsByteOrder f);
+		void SetHeader(HdrDpxFieldsString f, std::string s);
+		std::string GetHeader(HdrDpxFieldsString f);
+		void SetHeader(HdrDpxFieldsU32 f, uint32_t d);
+		uint32_t GetHeader(HdrDpxFieldsU32 f);
+		void SetHeader(HdrDpxFieldsU16 f, uint16_t d);
+		uint16_t GetHeader(HdrDpxFieldsU16 f);
+		void SetHeader(HdrDpxFieldsR32 f, float d);
+		float GetHeader(HdrDpxFieldsR32 f);
+		void SetHeader(HdrDpxFieldsU8 f, uint8_t d);
+		uint8_t GetHeader(HdrDpxFieldsU8 f);
+		void SetHeader(HdrDpxFieldsDittoKey f, HdrDpxDittoKey d);
+		HdrDpxDittoKey GetHeader(HdrDpxFieldsDittoKey f);
+		void SetHeader(HdrDpxFieldsDatumMappingDirection f, HdrDpxDatumMappingDirection d);
+		HdrDpxDatumMappingDirection GetHeader(HdrDpxFieldsDatumMappingDirection f);
+		void SetHeader(HdrDpxFieldsOrientation f, HdrDpxOrientation d);
+		HdrDpxOrientation GetHeader(HdrDpxFieldsOrientation f);
+		void SetHeader(HdrDpxFieldsInterlace f, HdrDpxInterlace d);
+		HdrDpxInterlace GetHeader(HdrDpxFieldsInterlace f);
+		void SetHeader(HdrDpxFieldsVideoSignal f, HdrDpxVideoSignal d);
+		HdrDpxVideoSignal GetHeader(HdrDpxFieldsVideoSignal f);
+		void SetHeader(HdrDpxFieldsVideoIdentificationCode f, HdrDpxVideoIdentificationCode d);
+		HdrDpxVideoIdentificationCode GetHeader(HdrDpxFieldsVideoIdentificationCode f);
+		void SetHeader(HdrDpxFieldsByteOrder f, HdrDpxByteOrder d);
+		HdrDpxByteOrder GetHeader(HdrDpxFieldsByteOrder f);
 
-		std::shared_ptr<HdrDpxImageElement> m_IE[8];
-		bool m_is_IE_initialized[8];
+		HdrDpxImageElement *GetImageElement(uint8_t ie_index);
 		std::list<std::string> GetWarningList();
 
 	private:
+		//friend class HdrDpxImageElement;
+		HdrDpxImageElement m_IE[8];
 		bool CopyStringN(char *dest, std::string src, int l);
 		std::string CopyToStringN(char * src, int l);
 		void ByteSwapHeader(void);
@@ -1234,28 +1247,26 @@ namespace Dpx {
 		bool ByteSwapToMachine(void);
 		void ComputeOffsets();
 		void FillCoreFields();
-		void CheckDataCollisions(uint32_t *ie_data_block_ends);
 
 		std::list<std::string> m_warn_messages;
 		std::string m_file_name;
 		SMPTETimeCode m_smptetimecode;
 		SMPTEUserBits m_smpteuserbits;
 		bool m_file_is_hdr_version = false;
-		bool m_machine_is_mbsf = false;
+		bool m_machine_is_msbf = false;
 		bool m_sbm_present = false;
+		bool m_open_for_write = false;
+		bool m_open_for_read = false;
+		std::fstream m_file_stream;
+		uint8_t m_active_rle_ie;
 
-		Dpx::HdrDpxByteOrder m_byteorder = Dpx::eNativeByteOrder;
-		Dpx::HdrDpxVersion m_version = Dpx::eDPX_2_0_HDR;
-		Dpx::HdrDpxDittoKey m_dittokey = Dpx::eDittoKeyUndefined;
-		Dpx::HdrDpxDatumMappingDirection m_datummappingdirection = Dpx::eDatumMappingDirectionUndefined;
-		Dpx::HdrDpxInterlace m_interlaced = Dpx::eInterlaceUndefined;
-		Dpx::HdrDpxVideoSignal m_videosignal = Dpx::eVideoSignalUndefined;
-		Dpx::HdrDpxVideoIdentificationCode m_videoidentificationcode = Dpx::eVIC_undefined;
+		HdrDpxByteOrder m_byteorder = eNativeByteOrder;
 		HDRDPXFILEFORMAT m_dpx_header;
 		HDRDPXSBMDATA m_dpx_sbmdata;
 		HDRDPXUSERDATA m_dpx_userdata;
+		FileMap m_filemap;
 
-		Dpx::ErrorObject m_err;
+		ErrorObject m_err;
 	};
 
 

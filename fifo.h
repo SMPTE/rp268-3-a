@@ -37,12 +37,14 @@
 #ifndef FIFO_H
 #define FIFO_H
 #include <cstdint>
+#include <vector>
 
 class Fifo
 {
 public:
 	Fifo(int size);
 	~Fifo();
+	Fifo(const Fifo &f);
 	uint32_t GetBitsUi(int nbits);
 	int32_t GetBitsI(int nbits);
 	void PutBits(uint32_t d, int nbits);
@@ -55,7 +57,7 @@ public:
 	void PutDatum(int32_t datum, int nbits, bool direction_r2l);
 	int m_fullness;
 private:
-	unsigned char *m_data;
+	std::vector<uint8_t> m_data;
 	int m_size;
 	int m_read_ptr;
 	int m_write_ptr;

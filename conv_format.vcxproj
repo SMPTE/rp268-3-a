@@ -153,7 +153,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="fifo.cpp" />
-    <ClCompile Include="generic_pixel_array.cpp" />
+    <ClCompile Include="file_map.cpp" />
+    <ClCompile Include="generate_color_bar.cpp" />
     <ClCompile Include="hdr_dpx_file.cpp" />
     <ClCompile Include="hdr_dpx_image_element.cpp" />
     <ClCompile Include="main.cpp" />
@@ -163,7 +164,7 @@
     <ClInclude Include="datum.h" />
     <ClInclude Include="dpx.h" />
     <ClInclude Include="fifo.h" />
-    <ClInclude Include="generic_pixel_array.h" />
+    <ClInclude Include="file_map.h" />
     <ClInclude Include="hdr_dpx.h" />
     <ClInclude Include="hdr_dpx_error.h" />
     <ClInclude Include="logging.h" />

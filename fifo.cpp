@@ -53,7 +53,7 @@
 \param size		 Specifies FIFO size in bytes */
 Fifo::Fifo(int size)
 {
-	m_data = new unsigned char[size];
+	m_data.resize(size);
 	m_size = size * 8;
 	m_fullness = 0;
 	m_read_ptr = m_write_ptr = 0;
@@ -62,11 +62,23 @@ Fifo::Fifo(int size)
 }
 
 
+Fifo::Fifo(const Fifo &f)
+{
+	m_data = f.m_data;
+	m_size = f.m_size;
+	m_fullness = f.m_fullness;
+	m_read_ptr = f.m_read_ptr;
+	m_write_ptr = f.m_write_ptr;
+	m_max_fullness = f.m_max_fullness;
+	m_byte_ctr = f.m_byte_ctr;
+}
+
+
 //! Free a FIFO object
 /*! \param fifo		Pointer to FIFO data structure */
 Fifo::~Fifo()
 {
-	delete m_data;
+	;
 }
 
 

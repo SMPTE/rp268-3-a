@@ -51,7 +51,8 @@ namespace Dpx {
 		eFileOpenError,
 		eFileReadError,
 		eFileWriteError,
-		eBadParameter
+		eBadParameter,
+		eHeaderLocked
 	};
 
 	class ErrorObject
