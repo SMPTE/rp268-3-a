@@ -228,14 +228,14 @@ typedef struct _HdrDpxFileFormat
 typedef struct _HdrDpxUserData
 {
 	char     UserIdentification[32];	/* User identification */
-	uint8_t *UserData;		/* User data */
+	std::vector<uint8_t> UserData;		/* User data */
 } HDRDPXUSERDATA;
 
 typedef struct _HdrDpxSbmData
 {
 	char 		SbmFormatDescriptor[128];	/* SBM format decriptor */
 	uint32_t	SbmLength;					/* Length of data that follows */
-	uint8_t		*SbmData;			/* Standards-based metadata */
+	std::vector<uint8_t> SbmData;			/* Standards-based metadata */
 } HDRDPXSBMDATA;
 
 typedef union _datum
@@ -281,7 +281,11 @@ namespace Dpx {
 		eCount, // 4
 		eFormat, // 32
 		eFrameId, // 32
-		eSlateInfo // 100
+		eSlateInfo, // 100
+		eUserIdentification,   // 32
+		eUserDefinedData,       // Up to 1000000
+		eSBMFormatDescriptor,   // 128
+		eSBMetadata		// Not explicitly limited
 	};
 
 	enum HdrDpxFieldsU32 // No compile-time checks, but run-time checks are needed to validate
@@ -290,7 +294,7 @@ namespace Dpx {
 		eFileSize,
 		eGenericSize,
 		eIndustrySize,
-		eUserSize,
+		eUserDefinedHeaderLength,
 		eEncryptKey,
 		eStandardsBasedMetadataOffset,
 		ePixelsPerLine,
@@ -302,8 +306,9 @@ namespace Dpx {
 		eAspectRatioH,
 		eAspectRatioV,
 		eFramePosition,
-		eSequenceLen,
+		eSequenceLength,
 		eHeldCount,
+		eSBMLength
 	};
 
 	enum HdrDpxFieldsU16
@@ -1209,7 +1214,7 @@ namespace Dpx {
 
 		// overloaded functions for header field access
 		// TODO: rename variables
-		void SetHeader(HdrDpxFieldsString f, std::string s);
+		void SetHeader(HdrDpxFieldsString f, const std::string &s);
 		std::string GetHeader(HdrDpxFieldsString f);
 		void SetHeader(HdrDpxFieldsU32 f, uint32_t d);
 		uint32_t GetHeader(HdrDpxFieldsU32 f);
@@ -1233,6 +1238,10 @@ namespace Dpx {
 		HdrDpxVideoIdentificationCode GetHeader(HdrDpxFieldsVideoIdentificationCode f);
 		void SetHeader(HdrDpxFieldsByteOrder f, HdrDpxByteOrder d);
 		HdrDpxByteOrder GetHeader(HdrDpxFieldsByteOrder f);
+		void SetUserData(std::string userid, std::vector<uint8_t> userdata);
+		bool GetUserData(std::string &userid, std::vector<uint8_t> &userdata);
+		void SetStandardsBasedMetadata(std::string sbm_descriptor, std::vector<uint8_t> sbmdata);
+		bool GetStandardsBasedMetadata(std::string &sbm_descriptor, std::vector<uint8_t> &sbmdata);
 
 		HdrDpxImageElement *GetImageElement(uint8_t ie_index);
 		std::list<std::string> GetWarningList();
@@ -1247,6 +1256,7 @@ namespace Dpx {
 		bool ByteSwapToMachine(void);
 		void ComputeOffsets();
 		void FillCoreFields();
+		void CopyByteVectorToString(std::string &s, const char *bytes);
 
 		std::list<std::string> m_warn_messages;
 		std::string m_file_name;
@@ -1257,6 +1267,7 @@ namespace Dpx {
 		bool m_sbm_present = false;
 		bool m_open_for_write = false;
 		bool m_open_for_read = false;
+		bool m_is_header_locked = false;
 		std::fstream m_file_stream;
 		uint8_t m_active_rle_ie;
 

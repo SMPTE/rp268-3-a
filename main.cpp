@@ -41,6 +41,10 @@
 #include "hdr_dpx.h"
 #include "raw_pixel_array.h"
 #include <iostream>
+#include <sstream>
+#include <iomanip>
+
+using namespace std;
 
 void example_read(void);
 void example_write(void);
@@ -125,13 +129,26 @@ static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 	}
 }
 
+inline string tohex(uint8_t v)
+{
+	stringstream ss;
+	
+	ss << setfill('0');
+
+	ss << hex << setw(2) << v;
+
+	return ss.str();
+}
+
 // Example calling sequence for HDR DPX read:
 void example_read()
 {
 	std::string filename("colorbar.dpx");
 	Dpx::HdrDpxFile  f(filename);
 	Dpx::HdrDpxImageElement *ie = f.GetImageElement(0);
-	
+	std::string userid, sbmdesc;
+	std::vector<uint8_t> userdata, sbmdata;
+
 	if (!f.IsOk())   // can't open, unrecognized format
 	{
 		dump_error_log("Read failed:\n", f);
@@ -145,13 +162,49 @@ void example_read()
 		std::cout << "DPX header:\n" << f.DumpHeader();
 		return;
 	}
-	
+
 	if (f.Validate())  // fields have to be valid, at least 1 image element, image data is interpretable, not out of bounds for offsets
 	{
 		dump_error_log("Validation errors:\n", f);
 	}
 
 	std::cout << f;  // Dump header
+
+	if (f.GetUserData(userid, userdata))
+	{
+
+		std::cout << "User identification: '" << userid << "'\n";
+		std::cout << "User data (hex bytes):\n";
+		for (int i = 0; i < userdata.size(); ++i)
+		{
+			std::cout << tohex(userdata[i]) << " ";
+			if ((i & 0xf) == 0xf)
+				std::cout << "\n";
+		}
+		std::cout << "\n";
+		// Could also print user-defined data as a string using f.GetHeader(Dpx::eUserDefinedData)
+	}
+
+	if (f.GetStandardsBasedMetadata(sbmdesc, sbmdata))
+	{
+		std::cout << "Standards-based metadata type: " << sbmdesc << "\n";
+		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
+		{
+			std::cout << "Hex bytes:\n";
+			for (int i = 0; i < userdata.size(); ++i)
+			{
+				std::cout << tohex(userdata[i]) << " ";
+				if ((i & 0xf) == 0xf)
+					std::cout << "\n";
+			}
+		}
+		else   // Print as string
+		{
+			std::cout << f.GetHeader(Dpx::eSBMetadata);
+		}
+
+		std::cout << "\n";
+	}
 
 	std::cout << "Component types for image element 0: ";
 	for (auto c : ie->GetDatumLabels())

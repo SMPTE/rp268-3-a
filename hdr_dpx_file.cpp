@@ -730,8 +730,27 @@ bool HdrDpxFile::CopyStringN(char *dest, std::string src, int l)
 	return (src.length() > l);  // return true if the string is longer than the field
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsString f, std::string s)
+std::size_t utf8_length(const std::string &s)
 {
+	std::size_t result = 0;
+	const char *ptr = s.data();
+	const char *end = ptr + s.size();
+	std::mblen(NULL, 0);
+	while (ptr < end)
+	{
+		int next = std::mblen(ptr, end - ptr);
+		if (next == -1)
+			return 0;		// String not valid
+		ptr += next;
+		++result;
+	}
+	return result;
+}
+
+
+void HdrDpxFile::SetHeader(HdrDpxFieldsString f, const std::string &s)
+{
+	std::size_t l;
 	switch (f)
 	{
 	case eFileName:
@@ -802,6 +821,24 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString f, std::string s)
 		if (CopyStringN(m_dpx_header.FilmHeader.SlateInfo, s, 100))
 			m_warn_messages.push_back("SetHeader(): Specified slate info (" + s + ") exceeds header field size\n");
 		break;
+	case eUserIdentification:
+		if (CopyStringN(m_dpx_userdata.UserIdentification, s, 32))
+			m_warn_messages.push_back("SetHeader(): Specified user identification (" + s + ") exceeds header field size\n");
+		break;
+	case eUserDefinedData:
+		l = utf8_length(s);
+		m_dpx_userdata.UserData.resize(l);
+		memcpy(m_dpx_userdata.UserData.data(), s.data(), l);
+		break;
+	case eSBMFormatDescriptor:
+		if (CopyStringN(m_dpx_sbmdata.SbmFormatDescriptor, s, 128))
+			m_warn_messages.push_back("SetHeader(): Specified SBM format descriptor (" + s + ") exceeds header field size\n");
+		break;
+	case eSBMetadata:
+		l = utf8_length(s);
+		m_dpx_sbmdata.SbmData.resize(l);
+		memcpy(m_dpx_sbmdata.SbmData.data(), s.data(), l);
+		break;
 	}
 }
 
@@ -858,6 +895,18 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString f)
 		return CopyToStringN(m_dpx_header.FilmHeader.FrameId, 32);
 	case eSlateInfo:
 		return CopyToStringN(m_dpx_header.FilmHeader.SlateInfo, 100);
+	case eUserIdentification:
+		return CopyToStringN(m_dpx_userdata.UserIdentification, 32);
+	case eUserDefinedData:
+		if (!m_dpx_userdata.UserData.size())
+			return "";
+		return std::string((char *)m_dpx_userdata.UserData.data());
+	case eSBMFormatDescriptor:
+		return CopyToStringN(m_dpx_sbmdata.SbmFormatDescriptor, 128);
+	case eSBMetadata:
+		if (!m_dpx_sbmdata.SbmData.size())
+			return "";	
+		return std::string((char *)m_dpx_sbmdata.SbmData.data());
 	}
 	return "";
 }
@@ -878,8 +927,9 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 f, uint32_t d)
 	case eIndustrySize:
 		m_dpx_header.FileHeader.IndustrySize = d;
 		break;
-	case eUserSize:
-		m_dpx_header.FileHeader.UserSize = d;
+	case eUserDefinedHeaderLength:
+		//m_dpx_header.FileHeader.UserSize = d;
+		LOG_ERROR(eBadParameter, eWarning, "User data length can only be set by calling SetUserData() or SetHeader() using eUserDefinedData and a string");
 		break;
 	case eEncryptKey:
 		m_dpx_header.FileHeader.EncryptKey = d;
@@ -914,11 +964,14 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 f, uint32_t d)
 	case eFramePosition:
 		m_dpx_header.FilmHeader.FramePosition = d;
 		break;
-	case eSequenceLen:
+	case eSequenceLength:
 		m_dpx_header.FilmHeader.SequenceLen = d;
 		break;
 	case eHeldCount:
 		m_dpx_header.FilmHeader.HeldCount = d;
+	case eSBMLength:
+		LOG_ERROR(eBadParameter, eWarning, "Standards-based metadata length can only be set by calling SetStandardsBasedMetadata() or SetHeader() using eSBMetadata and a string");
+		break;
 	}
 }
 
@@ -934,7 +987,7 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f)
 		return(m_dpx_header.FileHeader.GenericSize);
 	case eIndustrySize:
 		return(m_dpx_header.FileHeader.IndustrySize);
-	case eUserSize:
+	case eUserDefinedHeaderLength:
 		return(m_dpx_header.FileHeader.UserSize);
 	case eEncryptKey:
 		return(m_dpx_header.FileHeader.EncryptKey);
@@ -958,10 +1011,12 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f)
 		return(m_dpx_header.SourceInfoHeader.AspectRatio[1]);
 	case eFramePosition:
 		return(m_dpx_header.FilmHeader.FramePosition);
-	case eSequenceLen:
+	case eSequenceLength:
 		return(m_dpx_header.FilmHeader.SequenceLen);
 	case eHeldCount:
 		return(m_dpx_header.FilmHeader.HeldCount);
+	case eSBMLength:
+		return(m_dpx_sbmdata.SbmLength);
 	}
 	return 0;
 }
@@ -1176,6 +1231,63 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsByteOrder f, HdrDpxByteOrder d)
 HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder f)
 {
 	return m_byteorder;
+}
+
+
+void HdrDpxFile::SetUserData(std::string userid, std::vector<uint8_t> userdata)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	if (userdata.size() + 32 > 1000000)
+	{
+		LOG_ERROR(eBadParameter, eWarning, "User data length limited to a max of 1000000 bytes");
+		return;
+	}
+	CopyStringN(m_dpx_userdata.UserIdentification, userid, 32);
+	m_dpx_userdata.UserData = userdata;
+	m_dpx_header.FileHeader.UserSize = static_cast<DWORD>(userdata.size() + 32);
+}
+
+bool HdrDpxFile::GetUserData(std::string &userid, std::vector<uint8_t> &userdata)
+{
+	if (m_dpx_header.FileHeader.UserSize == 0)		// nothing to do
+		return true;
+	if (m_dpx_userdata.UserData.size() + 32 != m_dpx_header.FileHeader.UserSize)
+	{
+		LOG_ERROR(eBadParameter, eWarning, "Unexpected mismatch between file header and user data size");
+		return false;
+	}
+	userid = CopyToStringN(m_dpx_userdata.UserIdentification, 32);
+	userdata = m_dpx_userdata.UserData;
+	return true;
+}
+
+void HdrDpxFile::SetStandardsBasedMetadata(std::string sbm_descriptor, std::vector<uint8_t> sbmdata)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	if (sbm_descriptor.compare("ST336") == 0 && sbm_descriptor.compare("Reg-XML") == 0 && sbm_descriptor.compare("XMP") == 0)
+	{
+		LOG_ERROR(eBadParameter, eWarning, "Setting standards-based metadata descriptor to nonstandard type");
+	}
+	CopyStringN(m_dpx_sbmdata.SbmFormatDescriptor, sbm_descriptor, 128);
+	m_dpx_sbmdata.SbmData = sbmdata;
+	m_dpx_sbmdata.SbmLength = static_cast<uint32_t>(sbmdata.size());
+}
+
+bool HdrDpxFile::GetStandardsBasedMetadata(std::string &sbm_descriptor, std::vector<uint8_t> &sbmdata)
+{
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UINT32_MAX)		// nothing to do
+		return false;
+	sbm_descriptor = CopyToStringN(m_dpx_sbmdata.SbmFormatDescriptor, 128);
+	sbmdata = m_dpx_sbmdata.SbmData;
+	return true;
 }
 
 std::list<std::string> HdrDpxFile::GetWarningList(void)

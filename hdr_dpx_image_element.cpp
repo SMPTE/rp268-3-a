@@ -1263,6 +1263,22 @@ uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f)
 	return 0;
 }
 
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorDifferenceSiting f, HdrDpxColorDifferenceSiting d)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	uint32_t bitmask = ~(0xf << (4 * m_ie_index));
+	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling &= bitmask;
+	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling |= static_cast<uint32_t>(d) << (4 * m_ie_index);
+}
+
+HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDifferenceSiting f)
+{
+	return static_cast<HdrDpxColorDifferenceSiting>(m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling >> (m_ie_index * 4) & 0xf);
+}
 
 uint32_t HdrDpxImageElement::GetWidth(void)
 {
