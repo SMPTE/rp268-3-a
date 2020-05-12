@@ -263,7 +263,7 @@ bool HdrDpxFile::ByteSwapToMachine(void)
 }
 
 
-bool HdrDpxFile::IsHdr(void)
+bool HdrDpxFile::IsHdr(void) const
 {
 	return (strcmp(m_dpx_header.FileHeader.Version, "V2.0HDR") == 0);
 }
@@ -271,16 +271,20 @@ bool HdrDpxFile::IsHdr(void)
 void HdrDpxFile::ComputeOffsets()
 {
 	uint32_t data_offset;
+	uint32_t min_offset = UINT32_MAX;
 
 	m_filemap.Reset();
 
 	// Fill in what is specified
 	m_filemap.AddRegion(0, sizeof(HDRDPXFILEFORMAT), 100);
 
-	if (m_dpx_header.FileHeader.UserSize != 0 && m_dpx_header.FileHeader.UserSize != UINT32_MAX)
+	if (m_dpx_header.FileHeader.UserSize == UINT32_MAX)   // Undefined value is not permitted in 268-2
+		m_dpx_header.FileHeader.UserSize = 0;
+
+	if (m_dpx_header.FileHeader.UserSize != 0)
 		m_filemap.AddRegion(sizeof(HDRDPXFILEFORMAT), ((sizeof(HDRDPXFILEFORMAT) + m_dpx_header.FileHeader.UserSize + 3) >> 2) << 2, 101);
 
-	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UINT32_MAX)
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UINT32_MAX && m_dpx_header.FileHeader.StandardsBasedMetadataOffset != eSBMAutoLocate)
 		m_filemap.AddRegion(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_dpx_header.FileHeader.StandardsBasedMetadataOffset + m_dpx_sbmdata.SbmLength + 132, 102);
 
 	// Add IEs with data offsets
@@ -331,11 +335,23 @@ void HdrDpxFile::ComputeOffsets()
 			}
 		}
 	}
+
+	// Figure out where image data starts
+	for (int i = 0; i < 8; ++i)
+	{
+		if (m_IE[i].m_isinitialized && min_offset > m_IE[i].GetHeader(eOffsetToData))
+			min_offset = m_IE[i].GetHeader(eOffsetToData);
+	}
+	if (m_dpx_header.FileHeader.ImageOffset == UINT32_MAX)
+		m_dpx_header.FileHeader.ImageOffset = min_offset;
+	if (m_dpx_header.FileHeader.ImageOffset != min_offset)
+		LOG_ERROR(eBadParameter, eWarning, "Image offset in main header does not match smallest image element offset");
+
 	if (m_filemap.CheckCollisions())
 		LOG_ERROR(eBadParameter, eWarning, "Image map has potentially overlapping regions");
 }
 
-uint8_t HdrDpxFile::GetActiveIE()
+uint8_t HdrDpxFile::GetActiveIE() const
 {
 	return m_active_rle_ie;
 }
@@ -517,6 +533,12 @@ void HdrDpxFile::Close()
 {
 	if (m_open_for_write)
 	{
+		// Compute SBM header offset if auto mode enabled
+		if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == eSBMAutoLocate)
+		{
+			m_dpx_header.FileHeader.StandardsBasedMetadataOffset = static_cast<uint32_t>(m_file_stream.tellp());
+		}
+
 		// Get RLE offsets if needed
 		std::vector<uint32_t> data_offsets = m_filemap.GetRLEIEDataOffsets();
 		for (int i = 0; i < 8;++i)
@@ -842,7 +864,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString f, const std::string &s)
 	}
 }
 
-std::string HdrDpxFile::CopyToStringN(char *src, int l)
+std::string HdrDpxFile::CopyToStringN(const char *src, int l) const
 {
 	int n;
 	std::string s ("");
@@ -857,7 +879,7 @@ std::string HdrDpxFile::CopyToStringN(char *src, int l)
 	return s;
 }
 
-std::string HdrDpxFile::GetHeader(HdrDpxFieldsString f)
+std::string HdrDpxFile::GetHeader(HdrDpxFieldsString f) const
 {
 	switch (f)
 	{
@@ -975,7 +997,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 f, uint32_t d)
 	}
 }
 
-uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f)
+uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f) const
 {
 	switch (f)
 	{
@@ -1042,7 +1064,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU16 f, uint16_t d)
 	}
 }
 
-uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 f)
+uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 f) const
 {
 	switch (f)
 	{
@@ -1108,7 +1130,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsR32 f, float d)
 	}
 }
 
-float HdrDpxFile::GetHeader(HdrDpxFieldsR32 f)
+float HdrDpxFile::GetHeader(HdrDpxFieldsR32 f) const
 {
 	switch (f)
 	{
@@ -1153,7 +1175,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU8 f, uint8_t d)
 	}
 }
 
-uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 f)
+uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 f) const
 {
 	switch(f)
 	{
@@ -1168,7 +1190,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsDittoKey f, HdrDpxDittoKey d)
 	m_dpx_header.FileHeader.DittoKey = static_cast<uint32_t>(d);
 }
 
-HdrDpxDittoKey HdrDpxFile::GetHeader(HdrDpxFieldsDittoKey f)
+HdrDpxDittoKey HdrDpxFile::GetHeader(HdrDpxFieldsDittoKey f) const
 {
 	return static_cast<HdrDpxDittoKey>(m_dpx_header.FileHeader.DittoKey);
 }
@@ -1178,7 +1200,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsDatumMappingDirection f, HdrDpxDatumMappi
 	m_dpx_header.FileHeader.DatumMappingDirection = static_cast<uint8_t>(d);
 }
 
-HdrDpxDatumMappingDirection HdrDpxFile::GetHeader(HdrDpxFieldsDatumMappingDirection f)
+HdrDpxDatumMappingDirection HdrDpxFile::GetHeader(HdrDpxFieldsDatumMappingDirection f) const
 {
 	return static_cast<HdrDpxDatumMappingDirection>(m_dpx_header.FileHeader.DatumMappingDirection);
 }
@@ -1188,7 +1210,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsOrientation f, HdrDpxOrientation d)
 	m_dpx_header.ImageHeader.Orientation = static_cast<uint16_t>(d);
 }
 
-HdrDpxOrientation HdrDpxFile::GetHeader(HdrDpxFieldsOrientation f)
+HdrDpxOrientation HdrDpxFile::GetHeader(HdrDpxFieldsOrientation f) const
 {
 	return static_cast<HdrDpxOrientation>(m_dpx_header.ImageHeader.Orientation);
 }
@@ -1198,7 +1220,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsInterlace f, HdrDpxInterlace d)
 	m_dpx_header.TvHeader.Interlace = static_cast<uint8_t>(d);
 }
 
-HdrDpxInterlace HdrDpxFile::GetHeader(HdrDpxFieldsInterlace f)
+HdrDpxInterlace HdrDpxFile::GetHeader(HdrDpxFieldsInterlace f) const
 {
 	return static_cast<HdrDpxInterlace>(m_dpx_header.TvHeader.Interlace);
 }
@@ -1208,7 +1230,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsVideoSignal f, HdrDpxVideoSignal d)
 	m_dpx_header.TvHeader.VideoSignal = static_cast<uint8_t>(d);
 }
 
-HdrDpxVideoSignal HdrDpxFile::GetHeader(HdrDpxFieldsVideoSignal f)
+HdrDpxVideoSignal HdrDpxFile::GetHeader(HdrDpxFieldsVideoSignal f) const
 {
 	return static_cast<HdrDpxVideoSignal>(m_dpx_header.TvHeader.VideoSignal);
 }
@@ -1218,7 +1240,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsVideoIdentificationCode f, HdrDpxVideoIde
 	m_dpx_header.TvHeader.VideoIdentificationCode = static_cast<uint8_t>(d);
 }
 
-HdrDpxVideoIdentificationCode HdrDpxFile::GetHeader(HdrDpxFieldsVideoIdentificationCode f)
+HdrDpxVideoIdentificationCode HdrDpxFile::GetHeader(HdrDpxFieldsVideoIdentificationCode f) const
 {
 	return static_cast<HdrDpxVideoIdentificationCode>(m_dpx_header.TvHeader.VideoIdentificationCode);
 }
@@ -1228,7 +1250,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsByteOrder f, HdrDpxByteOrder d)
 	m_byteorder = d;
 }
 
-HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder f)
+HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder f) const
 {
 	return m_byteorder;
 }
@@ -1251,15 +1273,10 @@ void HdrDpxFile::SetUserData(std::string userid, std::vector<uint8_t> userdata)
 	m_dpx_header.FileHeader.UserSize = static_cast<DWORD>(userdata.size() + 32);
 }
 
-bool HdrDpxFile::GetUserData(std::string &userid, std::vector<uint8_t> &userdata)
+bool HdrDpxFile::GetUserData(std::string &userid, std::vector<uint8_t> &userdata) const
 {
 	if (m_dpx_header.FileHeader.UserSize == 0)		// nothing to do
 		return true;
-	if (m_dpx_userdata.UserData.size() + 32 != m_dpx_header.FileHeader.UserSize)
-	{
-		LOG_ERROR(eBadParameter, eWarning, "Unexpected mismatch between file header and user data size");
-		return false;
-	}
 	userid = CopyToStringN(m_dpx_userdata.UserIdentification, 32);
 	userdata = m_dpx_userdata.UserData;
 	return true;
@@ -1281,7 +1298,7 @@ void HdrDpxFile::SetStandardsBasedMetadata(std::string sbm_descriptor, std::vect
 	m_dpx_sbmdata.SbmLength = static_cast<uint32_t>(sbmdata.size());
 }
 
-bool HdrDpxFile::GetStandardsBasedMetadata(std::string &sbm_descriptor, std::vector<uint8_t> &sbmdata)
+bool HdrDpxFile::GetStandardsBasedMetadata(std::string &sbm_descriptor, std::vector<uint8_t> &sbmdata) const
 {
 	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UINT32_MAX)		// nothing to do
 		return false;
@@ -1295,12 +1312,12 @@ std::list<std::string> HdrDpxFile::GetWarningList(void)
 	return m_warn_messages;
 }
 
-bool HdrDpxFile::IsOk(void)
+bool HdrDpxFile::IsOk(void)  const
 {
 	return m_err.GetWorstSeverity() != eFatal;
 }
 
-int HdrDpxFile::GetNumErrors(void)
+int HdrDpxFile::GetNumErrors(void)  const
 {
 	return m_err.GetNumErrors();
 }
@@ -1313,4 +1330,29 @@ void HdrDpxFile::GetError(int index, ErrorCode &errcode, ErrorSeverity &severity
 void HdrDpxFile::ClearErrors()
 {
 	m_err.Clear();
+}
+
+std::vector<uint8_t> HdrDpxFile::GetIEIndexList() const
+{
+	std::vector<uint8_t> ielist;
+	for (int ie = 0; ie < 8; ++ie)
+	{
+		if (m_IE[ie].m_isinitialized)
+			ielist.push_back(ie);
+	}
+	return ielist;
+}
+
+
+void HdrDpxFile::CopyHeaderFrom(const HdrDpxFile &src)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Can't copy header to locked file\n");
+		return;
+	}
+	// Copy header, userdata, sbmdata from other file
+	m_dpx_header = src.m_dpx_header;
+	m_dpx_sbmdata = src.m_dpx_sbmdata;
+	m_dpx_userdata = src.m_dpx_userdata;
 }

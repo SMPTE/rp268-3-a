@@ -242,7 +242,110 @@ std::vector<DatumLabel> Dpx::DescriptorToDatumList(uint8_t desc)
 	return dl;
 }
 
-std::string HdrDpxImageElement::DatumLabelToName(Dpx::DatumLabel dl)
+uint8_t Dpx::DatumListToDescriptor(std::vector<DatumLabel> dl)
+{
+	if (dl.size() == 0)
+		return 255;
+	if (dl.size() == 1)
+	{
+		if (dl[0] == DATUM_UNSPEC)
+			return eDescUser;
+		if (dl[0] == DATUM_R)
+			return eDescR;
+		if (dl[0] == DATUM_G)
+			return eDescG;
+		if (dl[0] == DATUM_B)
+			return eDescB;
+		if (dl[0] == DATUM_A)
+			return eDescA;
+		if (dl[0] == DATUM_Y)
+			return eDescY;
+		if (dl[0] == DATUM_Z)
+			return eDescZ;
+		if (dl[0] == DATUM_COMPOSITE)
+			return eDescComposite;
+		if (dl[0] == DATUM_CB)
+			return eDescCb;
+		if (dl[0] == DATUM_CR)
+			return eDescCr;
+		return 255;
+	}
+	if (dl.size() == 2)
+	{
+		if (dl[0] == DATUM_CB && dl[1] == DATUM_CR)
+			return eDescCbCr;
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2)
+			return eDescGeneric2;
+		return 255;
+	}
+	if (dl.size() == 3)
+	{
+		if (dl[0] == DATUM_B && dl[1] == DATUM_G && dl[2] == DATUM_R)
+			return eDescBGR;
+		if (dl[0] == DATUM_R && dl[1] == DATUM_G && dl[2] == DATUM_B)
+			return eDescRGB;
+		if (dl[0] == DATUM_CB && dl[1] == DATUM_Y && dl[2] == DATUM_CR)
+			return eDescCbYCr;
+		if (dl[0] == DATUM_C && dl[1] == DATUM_Y && dl[2] == DATUM_Y2)
+			return eDescCYY;
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3)
+			return eDescGeneric3;
+		return 255;
+	}
+	if (dl.size() == 4)
+	{
+		if (dl[0] == DATUM_B && dl[1] == DATUM_G && dl[2] == DATUM_R && dl[3] == DATUM_A)
+			return eDescBGRA;
+		if (dl[0] == DATUM_A && dl[1] == DATUM_R && dl[2] == DATUM_G && dl[3] == DATUM_B)
+			return eDescARGB;
+		if (dl[0] == DATUM_R && dl[1] == DATUM_G && dl[2] == DATUM_B && dl[3] == DATUM_A)
+			return eDescRGBA;
+		if (dl[0] == DATUM_A && dl[1] == DATUM_B && dl[2] == DATUM_G && dl[3] == DATUM_R)
+			return eDescARGB;
+		if (dl[0] == DATUM_CB && dl[1] == DATUM_Y && dl[2] == DATUM_CR && dl[3] == DATUM_Y2)
+			return eDescCbYCrY;
+		if (dl[0] == DATUM_CB && dl[1] == DATUM_Y && dl[2] == DATUM_CR && dl[3] == DATUM_A)
+			return eDescCbYCrA;
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3 && dl[3] == DATUM_UNSPEC4)
+			return eDescGeneric4;
+		return 255;
+	}
+	if (dl.size() == 5)
+	{
+		if (dl[0] == DATUM_C && dl[1] == DATUM_Y && dl[2] == DATUM_A && dl[3] == DATUM_Y2 && dl[4] == DATUM_A2)
+			return eDescCYAYA;
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3 && dl[3] == DATUM_UNSPEC4 &&
+			dl[4] == DATUM_UNSPEC5)
+			return eDescGeneric5;
+		return 255;
+	}
+	if (dl.size() == 6)
+	{
+		if (dl[0] == DATUM_CB && dl[1] == DATUM_Y && dl[2] == DATUM_A && dl[3] == DATUM_CR && dl[4] == DATUM_Y2 && dl[5] == DATUM_A2)
+			return eDescCbYACrYA;
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3 && dl[3] == DATUM_UNSPEC4 &&
+			dl[4] == DATUM_UNSPEC5 && dl[5] == DATUM_UNSPEC6)
+			return eDescGeneric6;
+		return 255;
+	}
+	if (dl.size() == 7)
+	{
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3 && dl[3] == DATUM_UNSPEC4 &&
+			dl[4] == DATUM_UNSPEC5 && dl[5] == DATUM_UNSPEC6 && dl[6] == DATUM_UNSPEC7)
+			return eDescGeneric7;
+		return 255;
+	}
+	if (dl.size() == 8)
+	{
+		if (dl[0] == DATUM_UNSPEC && dl[1] == DATUM_UNSPEC2 && dl[2] == DATUM_UNSPEC3 && dl[3] == DATUM_UNSPEC4 &&
+			dl[4] == DATUM_UNSPEC5 && dl[5] == DATUM_UNSPEC6 && dl[6] == DATUM_UNSPEC7 && dl[7] == DATUM_UNSPEC8)
+			return eDescGeneric8;
+		return 255;
+	}
+	return 255;
+}
+
+std::string HdrDpxImageElement::DatumLabelToName(Dpx::DatumLabel dl) const
 {
 	switch (dl)
 	{
@@ -322,6 +425,11 @@ HdrDpxImageElement::~HdrDpxImageElement()
 	;
 }
 
+void HdrDpxImageElement::Deinitialize()
+{
+	m_isinitialized = false;
+}
+
 
 void HdrDpxImageElement::OpenForReading(bool bswap)
 {
@@ -381,17 +489,17 @@ void HdrDpxImageElement::UnlockHeader(void)
 	m_is_header_locked = false;
 }
 
-std::vector<DatumLabel> HdrDpxImageElement::GetDatumLabels(void)
+std::vector<DatumLabel> HdrDpxImageElement::GetDatumLabels(void) const
 {
 	return DescriptorToDatumList(m_dpx_ie_ptr->Descriptor);
 }
 
-uint8_t HdrDpxImageElement::GetNumberOfComponents(void)
+uint8_t HdrDpxImageElement::GetNumberOfComponents(void) const
 {
 	return static_cast<int>(GetDatumLabels().size());
 }
 
-uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding)
+uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 {
 	uint8_t num_c = GetNumberOfComponents();
 	uint32_t idw_per_line;
@@ -1074,7 +1182,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsDataSign f, HdrDpxDataSign d)
 	m_dpx_ie_ptr->DataSign = static_cast<uint8_t>(d);
 }
 
-HdrDpxDataSign HdrDpxImageElement::GetHeader(HdrDpxFieldsDataSign f)
+HdrDpxDataSign HdrDpxImageElement::GetHeader(HdrDpxFieldsDataSign f) const
 {
 	return static_cast<HdrDpxDataSign>(m_dpx_ie_ptr->DataSign);
 }
@@ -1108,7 +1216,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsR32 f, float d)
 	}
 }
 
-float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 f)
+float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 f) const
 {
 	switch (f)
 	{
@@ -1141,7 +1249,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsDescriptor f, HdrDpxDescriptor d)
 	m_dpx_ie_ptr->Descriptor = static_cast<uint8_t>(d);
 }
 
-HdrDpxDescriptor HdrDpxImageElement::GetHeader(HdrDpxFieldsDescriptor f)
+HdrDpxDescriptor HdrDpxImageElement::GetHeader(HdrDpxFieldsDescriptor f) const
 {
 	return static_cast<HdrDpxDescriptor>(m_dpx_ie_ptr->Descriptor);
 }
@@ -1156,7 +1264,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsTransfer f, HdrDpxTransfer d)
 	m_dpx_ie_ptr->Transfer = static_cast<uint8_t>(d);
 }
 
-HdrDpxTransfer HdrDpxImageElement::GetHeader(HdrDpxFieldsTransfer f)
+HdrDpxTransfer HdrDpxImageElement::GetHeader(HdrDpxFieldsTransfer f) const
 {
 	return static_cast<HdrDpxTransfer>(m_dpx_ie_ptr->Transfer);
 }
@@ -1171,7 +1279,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorimetric f, HdrDpxColorimetri
 	m_dpx_ie_ptr->Colorimetric = static_cast<uint8_t>(d);
 }
 
-HdrDpxColorimetric HdrDpxImageElement::GetHeader(HdrDpxFieldsColorimetric f)
+HdrDpxColorimetric HdrDpxImageElement::GetHeader(HdrDpxFieldsColorimetric f) const
 {
 	return static_cast<HdrDpxColorimetric>(m_dpx_ie_ptr->Colorimetric);
 }
@@ -1194,7 +1302,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth f, HdrDpxBitDepth d)
 	
 }
 
-HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth f)
+HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth f) const
 {
 	return static_cast<HdrDpxBitDepth>(m_dpx_ie_ptr->BitSize);
 }
@@ -1209,7 +1317,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsPacking f, HdrDpxPacking d)
 	m_dpx_ie_ptr->Packing = static_cast<uint16_t>(d);
 }
 
-HdrDpxPacking HdrDpxImageElement::GetHeader(HdrDpxFieldsPacking f)
+HdrDpxPacking HdrDpxImageElement::GetHeader(HdrDpxFieldsPacking f) const
 {
 	return static_cast<HdrDpxPacking>(m_dpx_ie_ptr->Packing);
 }
@@ -1224,7 +1332,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsEncoding f, HdrDpxEncoding d)
 	m_dpx_ie_ptr->Encoding = static_cast<uint16_t>(d);
 }
 
-HdrDpxEncoding HdrDpxImageElement::GetHeader(HdrDpxFieldsEncoding f)
+HdrDpxEncoding HdrDpxImageElement::GetHeader(HdrDpxFieldsEncoding f) const
 {
 	return static_cast<HdrDpxEncoding>(m_dpx_ie_ptr->Encoding);
 }
@@ -1249,7 +1357,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsU32 f, uint32_t d)
 	}
 }
 
-uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f)
+uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f) const
 {
 	switch (f)
 	{
@@ -1275,17 +1383,17 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorDifferenceSiting f, HdrDpxCo
 	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling |= static_cast<uint32_t>(d) << (4 * m_ie_index);
 }
 
-HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDifferenceSiting f)
+HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDifferenceSiting f) const
 {
 	return static_cast<HdrDpxColorDifferenceSiting>(m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling >> (m_ie_index * 4) & 0xf);
 }
 
-uint32_t HdrDpxImageElement::GetWidth(void)
+uint32_t HdrDpxImageElement::GetWidth(void) const
 {
 	return m_width;
 }
 
-uint32_t HdrDpxImageElement::GetHeight(void)
+uint32_t HdrDpxImageElement::GetHeight(void) const
 {
 	return m_height;
 }
@@ -1298,6 +1406,11 @@ uint32_t HdrDpxImageElement::BytesUsed(void)
 		return(GetOffsetForRow(m_height));
 }
 
+void HdrDpxImageElement::CopyHeaderFrom(HdrDpxImageElement *ie)
+{
+	*m_dpx_ie_ptr = *(ie->m_dpx_ie_ptr);
+	SetHeader(eColorDifferenceSiting, ie->GetHeader(eColorDifferenceSiting));
+}
 
 /*
 bool HdrDpxImageElement::IsOk(void)
