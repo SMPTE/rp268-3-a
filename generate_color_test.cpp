@@ -728,21 +728,6 @@ private:
 };
 
 
-static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
-{
-	Dpx::ErrorCode code;
-	Dpx::ErrorSeverity severity;
-	std::string msg;
-
-	std::cerr << logmessage;
-
-	for (int i = 0; i < f.GetNumErrors(); ++i)
-	{
-		f.GetError(i, code, severity, msg);
-		std::cerr << msg << std::endl;
-	}
-}
-
 // Desc types:
 //   CbYCr
 //   CbYCrA

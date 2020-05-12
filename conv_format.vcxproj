@@ -22,7 +22,7 @@
     <ProjectGuid>{7B530403-890D-424D-9A93-D0D38A97616D}</ProjectGuid>
     <RootNamespace>DCXS</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <ProjectName>conv_format</ProjectName>
+    <ProjectName>dump_dpx</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -106,6 +106,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -154,10 +155,9 @@
   <ItemGroup>
     <ClCompile Include="fifo.cpp" />
     <ClCompile Include="file_map.cpp" />
-    <ClCompile Include="generate_color_bar.cpp" />
     <ClCompile Include="hdr_dpx_file.cpp" />
     <ClCompile Include="hdr_dpx_image_element.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="dump_dpx.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="cmd_parse.h" />

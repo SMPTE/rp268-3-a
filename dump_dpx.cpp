@@ -39,7 +39,6 @@
 #include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
-#include "raw_pixel_array.h"
 #include <iostream>
 #include <sstream>
 #include <iomanip>
