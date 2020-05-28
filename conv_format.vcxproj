@@ -160,16 +160,11 @@
     <ClCompile Include="dump_dpx.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cmd_parse.h" />
     <ClInclude Include="datum.h" />
-    <ClInclude Include="dpx.h" />
     <ClInclude Include="fifo.h" />
     <ClInclude Include="file_map.h" />
     <ClInclude Include="hdr_dpx.h" />
     <ClInclude Include="hdr_dpx_error.h" />
-    <ClInclude Include="logging.h" />
-    <ClInclude Include="utl.h" />
-    <ClInclude Include="vdo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

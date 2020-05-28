@@ -77,7 +77,7 @@ static int g_HdrDpxStringLengths[] =
 	100
 };
 
-HdrDpxFile::HdrDpxFile(std::string s)
+HdrDpxFile::HdrDpxFile(std::string filename)
 {
 	union
 	{
@@ -86,7 +86,7 @@ HdrDpxFile::HdrDpxFile(std::string s)
 	} u;
 	u.u32 = 0x12345678;
 	m_machine_is_msbf = (u.u32 == 0x12);
-	this->ReadFile(s);
+	this->OpenForReading(filename);
 }
 
 HdrDpxFile::HdrDpxFile()
@@ -107,7 +107,7 @@ HdrDpxFile::~HdrDpxFile()
 		m_file_stream.close();
 }
 
-void HdrDpxFile::ReadFile(std::string filename)
+void HdrDpxFile::OpenForReading(std::string filename)
 {
 	ErrorObject err;
 	
@@ -136,48 +136,39 @@ void HdrDpxFile::ReadFile(std::string filename)
 	}
 
 	// Read any present image elements
-	for (int i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_dpx_header.ImageHeader.ImageElement[i].DataOffset != UINT32_MAX)
+		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset != UINT32_MAX)
 		{
-			m_IE[i].Initialize(i, &m_file_stream, &m_dpx_header, &m_filemap);
-			m_IE[i].OpenForReading(swapped);
+			m_IE[ie_idx].Initialize(ie_idx, &m_file_stream, &m_dpx_header, &m_filemap);
+			m_IE[ie_idx].OpenForReading(swapped);
 		}
 		else
-			m_IE[i].m_isinitialized = false;
+			m_IE[ie_idx].m_isinitialized = false;
 	}
 	m_file_is_hdr_version = (static_cast<bool>(!strcmp(m_dpx_header.FileHeader.Version, "DPX2.0HDR")));
 
 	m_open_for_write = false;
 	m_open_for_read = true;
-	// TBD: Read user data & standards-based metadata
 }
 
-HdrDpxImageElement *HdrDpxFile::GetImageElement(uint8_t ie_index)
+HdrDpxImageElement *HdrDpxFile::GetImageElement(uint8_t ie_idx)
 {
-	if (ie_index < 0 || ie_index > 7)
+	if (ie_idx < 0 || ie_idx > 7)
 	{
 		LOG_ERROR(eBadParameter, eFatal, "Image element number out of bounds\n");
 		return NULL;
 	}
-	if (!m_IE[ie_index].m_isinitialized)
+	if (!m_IE[ie_idx].m_isinitialized)
 	{
-		m_IE[ie_index].Initialize(ie_index, &m_file_stream, &m_dpx_header, &m_filemap);
+		m_IE[ie_idx].Initialize(ie_idx, &m_file_stream, &m_dpx_header, &m_filemap);
 	}
-	return &(m_IE[ie_index]);
+	return &(m_IE[ie_idx]);
 }
 
 
-//#define BS_32(f,x)   { uint8_t *f_ptr; size_t o; uint8_t t; f_ptr=(uint8_t *)&(f); o=offsetof(HDRDPXFILEFORMAT,x); t=f_ptr[o]; f_ptr[o]=f_ptr[o+3]; f_ptr[o+3]=t; t=f_ptr[o+1]; f_ptr[o+1]=f_ptr[o+2]; f_ptr[o+2]=t; }
-//#define BS_16(f,x)   { uint8_t *f_ptr; size_t o; uint8_t t; f_ptr=(uint8_t *)&(f); o=offsetof(HDRDPXFILEFORMAT,x); t=f_ptr[o]; f_ptr[o]=f_ptr[o+1]; f_ptr[o]=t; }
-
 void HdrDpxFile::ByteSwapHeader(void)
 {
-	//HDRDPXFILEFORMAT *f;
-	int i;
-
-	//f = &m_dpx_header;
-
 	ByteSwap32(&(m_dpx_header.FileHeader.Magic));
 	ByteSwap32(&(m_dpx_header.FileHeader.ImageOffset));
 	ByteSwap32(&(m_dpx_header.FileHeader.FileSize));
@@ -194,19 +185,19 @@ void HdrDpxFile::ByteSwapHeader(void)
 	ByteSwap32(&(m_dpx_header.ImageHeader.LinesPerElement));
 	ByteSwap32(&(m_dpx_header.ImageHeader.ChromaSubsampling));
 
-	for (i = 0; i < NUM_IMAGE_ELEMENTS; ++i)
+	for (int ie_idx = 0; ie_idx < NUM_IMAGE_ELEMENTS; ++ie_idx)
 	{
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].DataSign));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].LowData.d));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].LowQuantity));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].HighData.d));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].HighQuantity));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].DataOffset));
-		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[i].Packing));
-		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[i].Encoding));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].DataOffset));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].EndOfLinePadding));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[i].EndOfImagePadding));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].DataSign));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].LowData.d));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].LowQuantity));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].HighData.d));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].HighQuantity));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset));
+		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].Packing));
+		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].Encoding));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfLinePadding));
+		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfImagePadding));
 	}
 
 	/* Image source info header details */
@@ -216,8 +207,8 @@ void HdrDpxFile::ByteSwapHeader(void)
 	ByteSwap32(&(m_dpx_header.SourceInfoHeader.YCenter));
 	ByteSwap32(&(m_dpx_header.SourceInfoHeader.XOriginalSize));
 	ByteSwap32(&(m_dpx_header.SourceInfoHeader.YOriginalSize));
-	for (i = 0; i<4; ++i)
-		ByteSwap16(&(m_dpx_header.SourceInfoHeader.Border[i]));
+	for (int border_idx = 0; border_idx<4; ++border_idx)
+		ByteSwap16(&(m_dpx_header.SourceInfoHeader.Border[border_idx]));
 	ByteSwap32(&(m_dpx_header.SourceInfoHeader.AspectRatio[0]));
 	ByteSwap32(&(m_dpx_header.SourceInfoHeader.AspectRatio[1]));
 
@@ -288,59 +279,59 @@ void HdrDpxFile::ComputeOffsets()
 		m_filemap.AddRegion(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_dpx_header.FileHeader.StandardsBasedMetadataOffset + m_dpx_sbmdata.SbmLength + 132, 102);
 
 	// Add IEs with data offsets
-	for (int i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
-			data_offset = m_IE[i].GetHeader(eOffsetToData);
+			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 			if (data_offset != UINT32_MAX)
 			{
-				if (m_IE[i].GetHeader(eEncoding) == eEncodingRLE)   // RLE can theoretically use more bits than compressed
+				if (m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)   // RLE can theoretically use more bits than compressed
 				{
-					uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[i].BytesUsed());
-					m_filemap.AddRegion(data_offset, data_offset + est_size, i);
-					m_filemap.AddRLEIE(i, data_offset, est_size);
+					uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].BytesUsed());
+					m_filemap.AddRegion(data_offset, data_offset + est_size, ie_idx);
+					m_filemap.AddRLEIE(ie_idx, data_offset, est_size);
 				}
 				else
-					m_filemap.AddRegion(data_offset, data_offset + m_IE[i].BytesUsed(), i);
+					m_filemap.AddRegion(data_offset, data_offset + m_IE[ie_idx].BytesUsed(), ie_idx);
 			}
 		}
 	}
 
 
 	// Next add fixed-size IE's that don't yet have data offsets
-	for (int i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
-			data_offset = m_IE[i].GetHeader(eOffsetToData);
-			if (data_offset == UINT32_MAX && m_IE[i].GetHeader(eEncoding) != eEncodingRLE)
-				m_IE[i].SetHeader(eOffsetToData, m_filemap.FindEmptySpace(m_IE[i].BytesUsed(), i));
+			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
+			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) != eEncodingRLE)
+				m_IE[ie_idx].SetHeader(eOffsetToData, m_filemap.FindEmptySpace(m_IE[ie_idx].BytesUsed(), ie_idx));
 		}
 	}
 
 	// Lastly add first variable-size IE
-	for (int i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
-			data_offset = m_IE[i].GetHeader(eOffsetToData);
-			if (data_offset == UINT32_MAX && m_IE[i].GetHeader(eEncoding) == eEncodingRLE)
+			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
+			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)
 			{
-				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[i].BytesUsed());
-				data_offset = m_filemap.FindEmptySpace(est_size, i);
-				m_IE[i].SetHeader(eOffsetToData, data_offset);
-				m_filemap.AddRLEIE(i, data_offset, est_size);
+				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].BytesUsed());
+				data_offset = m_filemap.FindEmptySpace(est_size, ie_idx);
+				m_IE[ie_idx].SetHeader(eOffsetToData, data_offset);
+				m_filemap.AddRLEIE(ie_idx, data_offset, est_size);
 				break;
 			}
 		}
 	}
 
 	// Figure out where image data starts
-	for (int i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized && min_offset > m_IE[i].GetHeader(eOffsetToData))
-			min_offset = m_IE[i].GetHeader(eOffsetToData);
+		if (m_IE[ie_idx].m_isinitialized && min_offset > m_IE[ie_idx].GetHeader(eOffsetToData))
+			min_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 	}
 	if (m_dpx_header.FileHeader.ImageOffset == UINT32_MAX)
 		m_dpx_header.FileHeader.ImageOffset = min_offset;
@@ -358,7 +349,7 @@ uint8_t HdrDpxFile::GetActiveIE() const
 
 void HdrDpxFile::FillCoreFields()
 {
-	int i, ne = 0, firstie = -1;
+	int number_of_ie = 0, first_ie_idx = -1;
 
 	if (m_dpx_header.FileHeader.Magic != 0x53445058 && m_dpx_header.FileHeader.Magic != UINT32_MAX)
 	{
@@ -376,16 +367,16 @@ void HdrDpxFile::FillCoreFields()
 	m_dpx_header.FileHeader.IndustrySize = 384;
 	ComputeOffsets();
 
-	for (i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
-			ne++;
-			if(firstie < 0)
-				firstie = i;
+			number_of_ie++;
+			if(first_ie_idx < 0)
+				first_ie_idx = ie_idx;
 		}
 	}
-	if(firstie < 0)
+	if(first_ie_idx < 0)
 		LOG_ERROR(eBadParameter, eFatal, "No initialized image elements found");
 
 	if (m_dpx_header.ImageHeader.Orientation == UINT16_MAX)
@@ -394,7 +385,7 @@ void HdrDpxFile::FillCoreFields()
 		m_dpx_header.ImageHeader.Orientation = 0;
 	}
 	if (m_dpx_header.ImageHeader.NumberElements == 0 || m_dpx_header.ImageHeader.NumberElements == UINT16_MAX)
-		m_dpx_header.ImageHeader.NumberElements = ne;
+		m_dpx_header.ImageHeader.NumberElements = number_of_ie;
 
 	if (m_dpx_header.ImageHeader.PixelsPerLine == UINT32_MAX)
 	{
@@ -406,85 +397,85 @@ void HdrDpxFile::FillCoreFields()
 		LOG_ERROR(eFileWriteError, eFatal, "Lines per element must be specified");
 		return;
 	}
-	for (i = 0; i < ne; ++i)
+	for (int ie_idx = 0; ie_idx < number_of_ie; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
 			// Default values for core fields that are not specified
-			if (m_IE[i].GetHeader(eBitDepth) == eBitDepthUndefined)
+			if (m_IE[ie_idx].GetHeader(eBitDepth) == eBitDepthUndefined)
 			{
 				LOG_ERROR(eMissingCoreField, eFatal, "Bit depth must be specified");
 				return;
 			}
 
-			if (m_IE[i].GetHeader(eDescriptor) == eDescUndefined)
+			if (m_IE[ie_idx].GetHeader(eDescriptor) == eDescUndefined)
 			{
 				LOG_ERROR(eMissingCoreField, eFatal, "Descriptor must be specified");
 				return;
 			}
 
-			if (m_IE[i].GetHeader(eDataSign) == eDataSignUndefined)
+			if (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUndefined)
 			{
-				LOG_ERROR(eMissingCoreField, eWarning, "Data sign for image element " + std::to_string(i + 1) + " not specified, assuming unsigned");
-				m_IE[i].SetHeader(eDataSign, eDataSignUnsigned);
+				LOG_ERROR(eMissingCoreField, eWarning, "Data sign for image element " + std::to_string(ie_idx + 1) + " not specified, assuming unsigned");
+				m_IE[ie_idx].SetHeader(eDataSign, eDataSignUnsigned);
 			}
-			if (std::isnan(m_IE[i].GetHeader(eReferenceLowDataCode)) || std::isnan(m_IE[i].GetHeader(eReferenceHighDataCode)))
+			if (std::isnan(m_IE[ie_idx].GetHeader(eReferenceLowDataCode)) || std::isnan(m_IE[ie_idx].GetHeader(eReferenceHighDataCode)))
 			{
-				if (m_IE[i].GetHeader(eBitDepth) < 32)
+				if (m_IE[ie_idx].GetHeader(eBitDepth) < 32)
 				{
-					LOG_ERROR(eMissingCoreField, eWarning, "Data range for image element " + std::to_string(i + 1) + " not specified, assuming full range");
-					m_IE[i].SetHeader(eReferenceLowDataCode, 0);
-					m_IE[i].SetHeader(eReferenceHighDataCode, static_cast<float>((1 << m_dpx_header.ImageHeader.ImageElement[i].BitSize) - 1));
+					LOG_ERROR(eMissingCoreField, eWarning, "Data range for image element " + std::to_string(ie_idx + 1) + " not specified, assuming full range");
+					m_IE[ie_idx].SetHeader(eReferenceLowDataCode, 0);
+					m_IE[ie_idx].SetHeader(eReferenceHighDataCode, static_cast<float>((1 << m_dpx_header.ImageHeader.ImageElement[ie_idx].BitSize) - 1));
 				}
 				else  // Floating point samples
 				{
-					LOG_ERROR(eMissingCoreField, eWarning, "Data range for image element " + std::to_string(i + 1) + " not specified, assuming full range (maxval = 1.0)");
-					m_IE[i].SetHeader(eReferenceLowDataCode, (float)0.0);
-					m_IE[i].SetHeader(eReferenceHighDataCode, (float)1.0);
+					LOG_ERROR(eMissingCoreField, eWarning, "Data range for image element " + std::to_string(ie_idx + 1) + " not specified, assuming full range (maxval = 1.0)");
+					m_IE[ie_idx].SetHeader(eReferenceLowDataCode, (float)0.0);
+					m_IE[ie_idx].SetHeader(eReferenceHighDataCode, (float)1.0);
 				}
 			}
 		}
 		else {
 			// Set ununsed image elements to all 1's
-			memset((void *)&(m_dpx_header.ImageHeader.ImageElement[i]), 0xff, sizeof(HDRDPX_IMAGEELEMENT));
+			memset((void *)&(m_dpx_header.ImageHeader.ImageElement[ie_idx]), 0xff, sizeof(HDRDPX_IMAGEELEMENT));
 		}
-		if (m_IE[i].GetHeader(eTransfer) == eTransferUndefined)
+		if (m_IE[ie_idx].GetHeader(eTransfer) == eTransferUndefined)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "Transfer characteristic for image element " + std::to_string(i + 1) + " not specified");
+			LOG_ERROR(eMissingCoreField, eWarning, "Transfer characteristic for image element " + std::to_string(ie_idx + 1) + " not specified");
 		}
-		if (m_IE[i].GetHeader(eColorimetric) == eColorimetricUndefined)
+		if (m_IE[ie_idx].GetHeader(eColorimetric) == eColorimetricUndefined)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "Colorimetric field for image element " + std::to_string(i + 1) + " not specified");
+			LOG_ERROR(eMissingCoreField, eWarning, "Colorimetric field for image element " + std::to_string(ie_idx + 1) + " not specified");
 		}
-		if (m_IE[i].GetHeader(ePacking) == ePackingUndefined)
+		if (m_IE[ie_idx].GetHeader(ePacking) == ePackingUndefined)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "Packing field not specified for image element " + std::to_string(i + 1) + ", assuming Packed");
-			m_IE[i].SetHeader(ePacking, ePackingPacked);
+			LOG_ERROR(eMissingCoreField, eWarning, "Packing field not specified for image element " + std::to_string(ie_idx + 1) + ", assuming Packed");
+			m_IE[ie_idx].SetHeader(ePacking, ePackingPacked);
 		}
-		if (m_IE[i].GetHeader(eEncoding) == eEncodingUndefined)
+		if (m_IE[ie_idx].GetHeader(eEncoding) == eEncodingUndefined)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "Encoding not specified for image element " + std::to_string(i + 1) + ", assuming uncompressed");
-			m_IE[i].SetHeader(eEncoding, eEncodingNoEncoding);		// No compression (default)
+			LOG_ERROR(eMissingCoreField, eWarning, "Encoding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming uncompressed");
+			m_IE[ie_idx].SetHeader(eEncoding, eEncodingNoEncoding);		// No compression (default)
 		}
-		if (m_IE[i].GetHeader(eEndOfLinePadding) == UINT32_MAX)
+		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) == UINT32_MAX)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "End of line padding not specified for image element " + std::to_string(i + 1) + ", assuming no padding");
-			m_IE[i].SetHeader(eEndOfLinePadding, 0);
+			LOG_ERROR(eMissingCoreField, eWarning, "End of line padding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming no padding");
+			m_IE[ie_idx].SetHeader(eEndOfLinePadding, 0);
 		}
-		if (m_IE[i].GetHeader(eEndOfImagePadding) == UINT32_MAX)
+		if (m_IE[ie_idx].GetHeader(eEndOfImagePadding) == UINT32_MAX)
 		{
-			LOG_ERROR(eMissingCoreField, eWarning, "End of image padding not specified for image element " + std::to_string(i + 1) + ", assuming no padding");
-			m_IE[i].SetHeader(eEndOfImagePadding, 0);
+			LOG_ERROR(eMissingCoreField, eWarning, "End of image padding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming no padding");
+			m_IE[ie_idx].SetHeader(eEndOfImagePadding, 0);
 		}
 	}
 }
 
 
-void HdrDpxFile::WriteFile(std::string fname)
+void HdrDpxFile::OpenForWriting(std::string filename)
 {
 	bool byte_swap;
 
-	m_file_stream.open(fname, std::ios::binary | std::ios::out);
+	m_file_stream.open(filename, std::ios::binary | std::ios::out);
 
 	if (m_byteorder == eNativeByteOrder)
 		byte_swap = false;
@@ -493,11 +484,11 @@ void HdrDpxFile::WriteFile(std::string fname)
 	else
 		byte_swap = m_machine_is_msbf ? false : true;
 
-	m_file_name = fname;
+	m_file_name = filename;
 	
 	if (!m_file_stream)
 	{
-		LOG_ERROR(eFileOpenError, eFatal, "Unable to open file " + fname + " for output");
+		LOG_ERROR(eFileOpenError, eFatal, "Unable to open file " + filename + " for output");
 		return;
 	}
 
@@ -510,11 +501,11 @@ void HdrDpxFile::WriteFile(std::string fname)
 		return;
 	}
 
-	for (int i = 0; i<8; ++i)
+	for (int ie_idx = 0; ie_idx<8; ++ie_idx)
 	{
-		if (m_IE[i].m_isinitialized)
+		if (m_IE[ie_idx].m_isinitialized)
 		{
-			m_IE[i].OpenForWriting(byte_swap);
+			m_IE[ie_idx].OpenForWriting(byte_swap);
 		}
 	}
 
@@ -541,9 +532,9 @@ void HdrDpxFile::Close()
 
 		// Get RLE offsets if needed
 		std::vector<uint32_t> data_offsets = m_filemap.GetRLEIEDataOffsets();
-		for (int i = 0; i < 8;++i)
-			if (m_dpx_header.ImageHeader.ImageElement[i].Encoding == 1)
-				m_dpx_header.ImageHeader.ImageElement[i].DataOffset = data_offsets[i];
+		for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+			if (m_dpx_header.ImageHeader.ImageElement[ie_idx].Encoding == 1)
+				m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset = data_offsets[ie_idx];
 
 		m_file_stream.seekp(0, std::ios::beg);
 		// Swap before writing header
@@ -567,18 +558,18 @@ void HdrDpxFile::Close()
 	if (m_open_for_read || m_open_for_write)
 	{
 		m_file_stream.close();
-		for (int i = 0; i < 8; ++i)
-			m_IE[i].m_isinitialized = false;
+		for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+			m_IE[ie_idx].m_isinitialized = false;
 		m_open_for_read = false;
 		m_open_for_write = false;
 	}
 }
 
-static std::string u32_to_hex(uint32_t v)
+static std::string u32_to_hex(uint32_t value)
 {
-	std::stringstream s;
-	s << "0x" << std::setfill('0') << std::setw(8) << std::hex << v;
-	return s.str();
+	std::stringstream sstream;
+	sstream << "0x" << std::setfill('0') << std::setw(8) << std::hex << value;
+	return sstream.str();
 }
 
 #define PRINT_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + std::to_string(v) + "\n"; }
@@ -595,8 +586,6 @@ std::string HdrDpxFile::DumpHeader() const
 	static const uint32_t undefined_4bytes = UINT32_MAX;  /* 4-byte block 0xffffffff used to check if floats are undefined */
 	std::string header;
 
-	int i;
-	
 	header = header + "\n\n//////////////////////////////////////////////////////////////////\n" +
 		"// File information header for " + m_file_name + "\n" +
 		"//////////////////////////////////////////////////////////////////\n";
@@ -625,40 +614,40 @@ std::string HdrDpxFile::DumpHeader() const
 	PRINT_RO_FIELD_U32(std::string("Pixels_Per_Line"), m_dpx_header.ImageHeader.PixelsPerLine);
 	PRINT_RO_FIELD_U32(std::string("Lines_Per_Element"), m_dpx_header.ImageHeader.LinesPerElement);
 
-	for (i = 0; i < 8; ++i)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		std::string fld_name;
-		header += "//// Image element data structure " + std::to_string(i + 1) + "\n";
-		fld_name = "Data_Sign_" + std::to_string(i + 1);		PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].DataSign);
-		if (m_dpx_header.ImageHeader.ImageElement[i].BitSize < 32)
+		header += "//// Image element data structure " + std::to_string(ie_idx + 1) + "\n";
+		fld_name = "Data_Sign_" + std::to_string(ie_idx + 1);		PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].DataSign);
+		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].BitSize < 32)
 		{
-			fld_name = "Low_Data_" + std::to_string(i + 1);			PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].LowData.d);
+			fld_name = "Low_Data_" + std::to_string(ie_idx + 1);			PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].LowData.d);
 		}
 		else
 		{
-			fld_name = "Low_Data_" + std::to_string(i + 1);			PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].LowData.f);
+			fld_name = "Low_Data_" + std::to_string(ie_idx + 1);			PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].LowData.f);
 		}
-		fld_name = "Low_Quantity_" + std::to_string(i + 1);		PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].LowQuantity);
-		if (m_dpx_header.ImageHeader.ImageElement[i].BitSize < 32)
+		fld_name = "Low_Quantity_" + std::to_string(ie_idx + 1);		PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].LowQuantity);
+		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].BitSize < 32)
 		{
-			fld_name = "High_Data_" + std::to_string(i + 1);		PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].HighData.d);
+			fld_name = "High_Data_" + std::to_string(ie_idx + 1);		PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].HighData.d);
 		}
 		else
 		{
-			fld_name = "High_Data_" + std::to_string(i + 1);		PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].HighData.f);
+			fld_name = "High_Data_" + std::to_string(ie_idx + 1);		PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].HighData.f);
 		}
-		fld_name = "High_Quantity_" + std::to_string(i + 1);	PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].HighQuantity);
-		fld_name = "Descriptor_" + std::to_string(i + 1);		PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Descriptor);
-		fld_name = "Transfer_" + std::to_string(i + 1);		PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Transfer);
-		fld_name = "Colorimetric_" + std::to_string(i + 1);	PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Colorimetric);
-		fld_name = "BitSize_" + std::to_string(i + 1);			PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[i].BitSize);
-		fld_name = "Packing_" + std::to_string(i + 1);			PRINT_FIELD_U16(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Packing);
-		fld_name = "Encoding_" + std::to_string(i + 1);		PRINT_FIELD_U16(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Encoding);
-		fld_name = "DataOffset_" + std::to_string(i + 1);		PRINT_RO_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].DataOffset);
-		fld_name = "End_Of_Line_Padding_" + std::to_string(i + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].EndOfLinePadding);
-		fld_name = "End_Of_Image_Padding_" + std::to_string(i + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[i].EndOfImagePadding);
-		fld_name = "Description_" + std::to_string(i + 1);		PRINT_FIELD_ASCII(fld_name, m_dpx_header.ImageHeader.ImageElement[i].Description, 32);
-		fld_name = "Chroma_Subsampling_" + std::to_string(i + 1); PRINT_FIELD_U8(fld_name, 0xf & (m_dpx_header.ImageHeader.ChromaSubsampling >> (i * 4)));
+		fld_name = "High_Quantity_" + std::to_string(ie_idx + 1);	PRINT_FIELD_R32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].HighQuantity);
+		fld_name = "Descriptor_" + std::to_string(ie_idx + 1);		PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Descriptor);
+		fld_name = "Transfer_" + std::to_string(ie_idx + 1);		PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Transfer);
+		fld_name = "Colorimetric_" + std::to_string(ie_idx + 1);	PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Colorimetric);
+		fld_name = "BitSize_" + std::to_string(ie_idx + 1);			PRINT_FIELD_U8(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].BitSize);
+		fld_name = "Packing_" + std::to_string(ie_idx + 1);			PRINT_FIELD_U16(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Packing);
+		fld_name = "Encoding_" + std::to_string(ie_idx + 1);		PRINT_FIELD_U16(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Encoding);
+		fld_name = "DataOffset_" + std::to_string(ie_idx + 1);		PRINT_RO_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset);
+		fld_name = "End_Of_Line_Padding_" + std::to_string(ie_idx + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfLinePadding);
+		fld_name = "End_Of_Image_Padding_" + std::to_string(ie_idx + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfImagePadding);
+		fld_name = "Description_" + std::to_string(ie_idx + 1);		PRINT_FIELD_ASCII(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Description, 32);
+		fld_name = "Chroma_Subsampling_" + std::to_string(ie_idx + 1); PRINT_FIELD_U8(fld_name, 0xf & (m_dpx_header.ImageHeader.ChromaSubsampling >> (ie_idx * 4)));
 	}
 
 	header += "\n// Image source information header\n";
@@ -738,25 +727,23 @@ bool HdrDpxFile::Validate()
 	return m_err.GetWorstSeverity() != eInformational;
 }
 
-bool HdrDpxFile::CopyStringN(char *dest, std::string src, int l)
+bool HdrDpxFile::CopyStringN(char *dest, std::string src, int max_length)
 {
-	int n;
-
-	for (n = 0; n < l; ++n)
+	for (int idx = 0; idx < max_length; ++idx)
 	{
-		if (n >= src.length())
+		if (idx >= src.length())
 			*(dest++) = '\0';
 		else
-			*(dest++) = src[n];
+			*(dest++) = src[idx];
 	}
-	return (src.length() > l);  // return true if the string is longer than the field
+	return (src.length() > max_length);  // return true if the string is longer than the field
 }
 
-std::size_t utf8_length(const std::string &s)
+std::size_t utf8_length(const std::string &utf8_string)
 {
 	std::size_t result = 0;
-	const char *ptr = s.data();
-	const char *end = ptr + s.size();
+	const char *ptr = utf8_string.data();
+	const char *end = ptr + utf8_string.size();
 	std::mblen(NULL, 0);
 	while (ptr < end)
 	{
@@ -770,106 +757,105 @@ std::size_t utf8_length(const std::string &s)
 }
 
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsString f, const std::string &s)
+void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 {
-	std::size_t l;
-	switch (f)
+	std::size_t length;
+	switch (field)
 	{
 	case eFileName:
-		if(CopyStringN(m_dpx_header.FileHeader.FileName, s, FILE_NAME_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified file name (" + s + ") exceeds header field size\n");
+		if(CopyStringN(m_dpx_header.FileHeader.FileName, value, FILE_NAME_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified file name (" + value + ") exceeds header field size\n");
 		break;
 	case eTimeDate:
-		if (CopyStringN(m_dpx_header.FileHeader.TimeDate, s, TIMEDATE_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified time & date (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FileHeader.TimeDate, value, TIMEDATE_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified time & date (" + value + ") exceeds header field size\n");
 		break;
 	case eCreator:
-		if (CopyStringN(m_dpx_header.FileHeader.Creator, s, CREATOR_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified creator (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FileHeader.Creator, value, CREATOR_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified creator (" + value + ") exceeds header field size\n");
 		break;
 	case eProject:
-		if (CopyStringN(m_dpx_header.FileHeader.Project, s, PROJECT_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified project (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FileHeader.Project, value, PROJECT_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified project (" + value + ") exceeds header field size\n");
 		break;
 	case eCopyright:
-		if (CopyStringN(m_dpx_header.FileHeader.Copyright, s, COPYRIGHT_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified copyright (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FileHeader.Copyright, value, COPYRIGHT_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified copyright (" + value + ") exceeds header field size\n");
 		break;
 	case eSourceFileName:
-		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceFileName, s, FILE_NAME_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified source file name (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceFileName, value, FILE_NAME_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified source file name (" + value + ") exceeds header field size\n");
 		break;
 	case eSourceTimeDate:
-		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceTimeDate, s, TIMEDATE_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified source time & date (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceTimeDate, value, TIMEDATE_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified source time & date (" + value + ") exceeds header field size\n");
 		break;
 	case eInputName:
-		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputName, s, INPUTNAME_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified input name (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputName, value, INPUTNAME_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified input name (" + value + ") exceeds header field size\n");
 		break;
 	case eInputSN:
-		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputSN, s, INPUTSN_SIZE))
-			m_warn_messages.push_back("SetHeader(): Specified input SN (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputSN, value, INPUTSN_SIZE))
+			m_warn_messages.push_back("SetHeader(): Specified input SN (" + value + ") exceeds header field size\n");
 		break;
 	case eFilmMfgId:
-		if (CopyStringN(m_dpx_header.FilmHeader.FilmMfgId, s, 2))
-			m_warn_messages.push_back("SetHeader(): Specified film mfg id (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.FilmMfgId, value, 2))
+			m_warn_messages.push_back("SetHeader(): Specified film mfg id (" + value + ") exceeds header field size\n");
 		break;
 	case eFilmType:
-		if (CopyStringN(m_dpx_header.FilmHeader.FilmType, s, 2))
-			m_warn_messages.push_back("SetHeader(): Specified film type (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.FilmType, value, 2))
+			m_warn_messages.push_back("SetHeader(): Specified film type (" + value + ") exceeds header field size\n");
 		break;
 	case eOffsetPerfs:
-		if (CopyStringN(m_dpx_header.FilmHeader.OffsetPerfs, s, 4))
-			m_warn_messages.push_back("SetHeader(): Specified offset perfs (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.OffsetPerfs, value, 4))
+			m_warn_messages.push_back("SetHeader(): Specified offset perfs (" + value + ") exceeds header field size\n");
 		break;
 	case ePrefix:
-		if (CopyStringN(m_dpx_header.FilmHeader.Prefix, s, 6))
-			m_warn_messages.push_back("SetHeader(): Specified prefix (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.Prefix, value, 6))
+			m_warn_messages.push_back("SetHeader(): Specified prefix (" + value + ") exceeds header field size\n");
 		break;
 	case eCount:
-		if (CopyStringN(m_dpx_header.FilmHeader.Count, s, 4))
-			m_warn_messages.push_back("SetHeader(): Specified film count (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.Count, value, 4))
+			m_warn_messages.push_back("SetHeader(): Specified film count (" + value + ") exceeds header field size\n");
 		break;
 	case eFormat:
-		if (CopyStringN(m_dpx_header.FilmHeader.Format, s, 32))
-			m_warn_messages.push_back("SetHeader(): Specified film format (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.Format, value, 32))
+			m_warn_messages.push_back("SetHeader(): Specified film format (" + value + ") exceeds header field size\n");
 		break;
 	case eFrameId:
-		if (CopyStringN(m_dpx_header.FilmHeader.FrameId, s, 32))
-			m_warn_messages.push_back("SetHeader(): Specified frame ID (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.FrameId, value, 32))
+			m_warn_messages.push_back("SetHeader(): Specified frame ID (" + value + ") exceeds header field size\n");
 		break;
 	case eSlateInfo:
-		if (CopyStringN(m_dpx_header.FilmHeader.SlateInfo, s, 100))
-			m_warn_messages.push_back("SetHeader(): Specified slate info (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_header.FilmHeader.SlateInfo, value, 100))
+			m_warn_messages.push_back("SetHeader(): Specified slate info (" + value + ") exceeds header field size\n");
 		break;
 	case eUserIdentification:
-		if (CopyStringN(m_dpx_userdata.UserIdentification, s, 32))
-			m_warn_messages.push_back("SetHeader(): Specified user identification (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_userdata.UserIdentification, value, 32))
+			m_warn_messages.push_back("SetHeader(): Specified user identification (" + value + ") exceeds header field size\n");
 		break;
 	case eUserDefinedData:
-		l = utf8_length(s);
-		m_dpx_userdata.UserData.resize(l);
-		memcpy(m_dpx_userdata.UserData.data(), s.data(), l);
+		length = utf8_length(value);
+		m_dpx_userdata.UserData.resize(length);
+		memcpy(m_dpx_userdata.UserData.data(), value.data(), length);
 		break;
 	case eSBMFormatDescriptor:
-		if (CopyStringN(m_dpx_sbmdata.SbmFormatDescriptor, s, 128))
-			m_warn_messages.push_back("SetHeader(): Specified SBM format descriptor (" + s + ") exceeds header field size\n");
+		if (CopyStringN(m_dpx_sbmdata.SbmFormatDescriptor, value, 128))
+			m_warn_messages.push_back("SetHeader(): Specified SBM format descriptor (" + value + ") exceeds header field size\n");
 		break;
 	case eSBMetadata:
-		l = utf8_length(s);
-		m_dpx_sbmdata.SbmData.resize(l);
-		memcpy(m_dpx_sbmdata.SbmData.data(), s.data(), l);
+		length = utf8_length(value);
+		m_dpx_sbmdata.SbmData.resize(length);
+		memcpy(m_dpx_sbmdata.SbmData.data(), value.data(), length);
 		break;
 	}
 }
 
-std::string HdrDpxFile::CopyToStringN(const char *src, int l) const
+std::string HdrDpxFile::CopyToStringN(const char *src, int max_length) const
 {
-	int n;
 	std::string s ("");
 
-	for (n = 0; n < l; ++n)
+	for (int idx = 0; idx < max_length; ++idx)
 	{
 		if (*src == '\0')
 			return s;
@@ -879,9 +865,9 @@ std::string HdrDpxFile::CopyToStringN(const char *src, int l) const
 	return s;
 }
 
-std::string HdrDpxFile::GetHeader(HdrDpxFieldsString f) const
+std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eFileName:
 		return CopyToStringN(m_dpx_header.FileHeader.FileName, FILE_NAME_SIZE);
@@ -933,73 +919,73 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString f) const
 	return "";
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsU32 f, uint32_t d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsU32 field, uint32_t value)
 {
-	switch (f)
+	switch (field)
 	{
 	case eImageOffset:
-		m_dpx_header.FileHeader.ImageOffset = d;
+		m_dpx_header.FileHeader.ImageOffset = value;
 		break;
 	case eFileSize:
-		m_dpx_header.FileHeader.FileSize = d;
+		m_dpx_header.FileHeader.FileSize = value;
 		break;
 	case eGenericSize:
-		m_dpx_header.FileHeader.GenericSize = d;
+		m_dpx_header.FileHeader.GenericSize = value;
 		break;
 	case eIndustrySize:
-		m_dpx_header.FileHeader.IndustrySize = d;
+		m_dpx_header.FileHeader.IndustrySize = value;
 		break;
 	case eUserDefinedHeaderLength:
-		//m_dpx_header.FileHeader.UserSize = d;
+		//m_dpx_header.FileHeader.UserSize = value;
 		LOG_ERROR(eBadParameter, eWarning, "User data length can only be set by calling SetUserData() or SetHeader() using eUserDefinedData and a string");
 		break;
 	case eEncryptKey:
-		m_dpx_header.FileHeader.EncryptKey = d;
+		m_dpx_header.FileHeader.EncryptKey = value;
 		break;
 	case eStandardsBasedMetadataOffset:
-		m_dpx_header.FileHeader.StandardsBasedMetadataOffset = d;
+		m_dpx_header.FileHeader.StandardsBasedMetadataOffset = value;
 		break;
 	case ePixelsPerLine:
-		m_dpx_header.ImageHeader.PixelsPerLine = d;
+		m_dpx_header.ImageHeader.PixelsPerLine = value;
 		break;
 	case eLinesPerElement:
-		m_dpx_header.ImageHeader.LinesPerElement = d;
+		m_dpx_header.ImageHeader.LinesPerElement = value;
 		break;
 	case eXOffset:
-		m_dpx_header.SourceInfoHeader.XOffset = d;
+		m_dpx_header.SourceInfoHeader.XOffset = value;
 		break;
 	case eYOffset:
-		m_dpx_header.SourceInfoHeader.YOffset = d;
+		m_dpx_header.SourceInfoHeader.YOffset = value;
 		break;
 	case eXOriginalSize:
-		m_dpx_header.SourceInfoHeader.XOriginalSize = d;
+		m_dpx_header.SourceInfoHeader.XOriginalSize = value;
 		break;
 	case eYOriginalSize:
-		m_dpx_header.SourceInfoHeader.YOriginalSize = d;
+		m_dpx_header.SourceInfoHeader.YOriginalSize = value;
 		break;
 	case eAspectRatioH:
-		m_dpx_header.SourceInfoHeader.AspectRatio[0] = d;
+		m_dpx_header.SourceInfoHeader.AspectRatio[0] = value;
 		break;
 	case eAspectRatioV:
-		m_dpx_header.SourceInfoHeader.AspectRatio[1] = d;
+		m_dpx_header.SourceInfoHeader.AspectRatio[1] = value;
 		break;
 	case eFramePosition:
-		m_dpx_header.FilmHeader.FramePosition = d;
+		m_dpx_header.FilmHeader.FramePosition = value;
 		break;
 	case eSequenceLength:
-		m_dpx_header.FilmHeader.SequenceLen = d;
+		m_dpx_header.FilmHeader.SequenceLen = value;
 		break;
 	case eHeldCount:
-		m_dpx_header.FilmHeader.HeldCount = d;
+		m_dpx_header.FilmHeader.HeldCount = value;
 	case eSBMLength:
 		LOG_ERROR(eBadParameter, eWarning, "Standards-based metadata length can only be set by calling SetStandardsBasedMetadata() or SetHeader() using eSBMetadata and a string");
 		break;
 	}
 }
 
-uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f) const
+uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eImageOffset:
 		return(m_dpx_header.FileHeader.ImageOffset);
@@ -1043,30 +1029,30 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 f) const
 	return 0;
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsU16 f, uint16_t d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsU16 field, uint16_t value)
 {
-	switch (f)
+	switch (field)
 	{
 	case eNumberElements:
-		m_dpx_header.ImageHeader.NumberElements = d;
+		m_dpx_header.ImageHeader.NumberElements = value;
 		break;
 	case eBorderXL:
-		m_dpx_header.SourceInfoHeader.Border[0] = d;
+		m_dpx_header.SourceInfoHeader.Border[0] = value;
 		break;
 	case eBorderXR:
-		m_dpx_header.SourceInfoHeader.Border[1] = d;
+		m_dpx_header.SourceInfoHeader.Border[1] = value;
 		break;
 	case eBorderYT:
-		m_dpx_header.SourceInfoHeader.Border[2] = d;
+		m_dpx_header.SourceInfoHeader.Border[2] = value;
 		break;
 	case eBorderYB:
-		m_dpx_header.SourceInfoHeader.Border[3] = d;
+		m_dpx_header.SourceInfoHeader.Border[3] = value;
 	}
 }
 
-uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 f) const
+uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eNumberElements:
 		return(m_dpx_header.ImageHeader.NumberElements);
@@ -1082,57 +1068,57 @@ uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 f) const
 	return 0;
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsR32 f, float d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsR32 field, float value)
 {
-	switch (f)
+	switch (field)
 	{
 	case eXCenter:
-		m_dpx_header.SourceInfoHeader.XCenter = d;
+		m_dpx_header.SourceInfoHeader.XCenter = value;
 		break;
 	case eYCenter:
-		m_dpx_header.SourceInfoHeader.YCenter = d;
+		m_dpx_header.SourceInfoHeader.YCenter = value;
 		break;
 	case eFilmFrameRate:
-		m_dpx_header.FilmHeader.FrameRate = d;
+		m_dpx_header.FilmHeader.FrameRate = value;
 		break;
 	case eShutterAngle:
-		m_dpx_header.FilmHeader.ShutterAngle = d;
+		m_dpx_header.FilmHeader.ShutterAngle = value;
 		break;
 	case eHorzSampleRate:
-		m_dpx_header.TvHeader.HorzSampleRate = d;
+		m_dpx_header.TvHeader.HorzSampleRate = value;
 		break;
 	case eVertSampleRate:
-		m_dpx_header.TvHeader.VertSampleRate = d;
+		m_dpx_header.TvHeader.VertSampleRate = value;
 		break;
 	case eTvFrameRate:
-		m_dpx_header.TvHeader.FrameRate = d;
+		m_dpx_header.TvHeader.FrameRate = value;
 		break;
 	case eTimeOffset:
-		m_dpx_header.TvHeader.TimeOffset = d;
+		m_dpx_header.TvHeader.TimeOffset = value;
 		break;
 	case eGamma:
-		m_dpx_header.TvHeader.Gamma = d;
+		m_dpx_header.TvHeader.Gamma = value;
 		break;
 	case eBlackLevel:
-		m_dpx_header.TvHeader.BlackLevel = d;
+		m_dpx_header.TvHeader.BlackLevel = value;
 		break;
 	case eBlackGain:
-		m_dpx_header.TvHeader.BlackGain = d;
+		m_dpx_header.TvHeader.BlackGain = value;
 		break;
 	case eBreakpoint:
-		m_dpx_header.TvHeader.Breakpoint = d;
+		m_dpx_header.TvHeader.Breakpoint = value;
 		break;
 	case eWhiteLevel:
-		m_dpx_header.TvHeader.WhiteLevel = d;
+		m_dpx_header.TvHeader.WhiteLevel = value;
 		break;
 	case eIntegrationTimes:
-		m_dpx_header.TvHeader.IntegrationTimes = d;
+		m_dpx_header.TvHeader.IntegrationTimes = value;
 	}
 }
 
-float HdrDpxFile::GetHeader(HdrDpxFieldsR32 f) const
+float HdrDpxFile::GetHeader(HdrDpxFieldsR32 field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eXCenter:
 		return(m_dpx_header.SourceInfoHeader.XCenter);
@@ -1166,18 +1152,18 @@ float HdrDpxFile::GetHeader(HdrDpxFieldsR32 f) const
 	return 0.0;
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsU8 f, uint8_t d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsU8 field, uint8_t value)
 {
-	switch (f)
+	switch (field)
 	{
 	case eFieldNumber:
-		m_dpx_header.TvHeader.FieldNumber = d;
+		m_dpx_header.TvHeader.FieldNumber = value;
 	}
 }
 
-uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 f) const
+uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 field) const
 {
-	switch(f)
+	switch(field)
 	{
 	case eFieldNumber:
 		return(m_dpx_header.TvHeader.FieldNumber);
@@ -1185,72 +1171,72 @@ uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 f) const
 	return 0;
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsDittoKey f, HdrDpxDittoKey d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsDittoKey field, HdrDpxDittoKey value)
 {
-	m_dpx_header.FileHeader.DittoKey = static_cast<uint32_t>(d);
+	m_dpx_header.FileHeader.DittoKey = static_cast<uint32_t>(value);
 }
 
-HdrDpxDittoKey HdrDpxFile::GetHeader(HdrDpxFieldsDittoKey f) const
+HdrDpxDittoKey HdrDpxFile::GetHeader(HdrDpxFieldsDittoKey field) const
 {
 	return static_cast<HdrDpxDittoKey>(m_dpx_header.FileHeader.DittoKey);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsDatumMappingDirection f, HdrDpxDatumMappingDirection d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsDatumMappingDirection field, HdrDpxDatumMappingDirection value)
 {
-	m_dpx_header.FileHeader.DatumMappingDirection = static_cast<uint8_t>(d);
+	m_dpx_header.FileHeader.DatumMappingDirection = static_cast<uint8_t>(value);
 }
 
-HdrDpxDatumMappingDirection HdrDpxFile::GetHeader(HdrDpxFieldsDatumMappingDirection f) const
+HdrDpxDatumMappingDirection HdrDpxFile::GetHeader(HdrDpxFieldsDatumMappingDirection field) const
 {
 	return static_cast<HdrDpxDatumMappingDirection>(m_dpx_header.FileHeader.DatumMappingDirection);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsOrientation f, HdrDpxOrientation d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsOrientation field, HdrDpxOrientation value)
 {
-	m_dpx_header.ImageHeader.Orientation = static_cast<uint16_t>(d);
+	m_dpx_header.ImageHeader.Orientation = static_cast<uint16_t>(value);
 }
 
-HdrDpxOrientation HdrDpxFile::GetHeader(HdrDpxFieldsOrientation f) const
+HdrDpxOrientation HdrDpxFile::GetHeader(HdrDpxFieldsOrientation field) const
 {
 	return static_cast<HdrDpxOrientation>(m_dpx_header.ImageHeader.Orientation);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsInterlace f, HdrDpxInterlace d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsInterlace field, HdrDpxInterlace value)
 {
-	m_dpx_header.TvHeader.Interlace = static_cast<uint8_t>(d);
+	m_dpx_header.TvHeader.Interlace = static_cast<uint8_t>(value);
 }
 
-HdrDpxInterlace HdrDpxFile::GetHeader(HdrDpxFieldsInterlace f) const
+HdrDpxInterlace HdrDpxFile::GetHeader(HdrDpxFieldsInterlace field) const
 {
 	return static_cast<HdrDpxInterlace>(m_dpx_header.TvHeader.Interlace);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsVideoSignal f, HdrDpxVideoSignal d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsVideoSignal field, HdrDpxVideoSignal value)
 {
-	m_dpx_header.TvHeader.VideoSignal = static_cast<uint8_t>(d);
+	m_dpx_header.TvHeader.VideoSignal = static_cast<uint8_t>(value);
 }
 
-HdrDpxVideoSignal HdrDpxFile::GetHeader(HdrDpxFieldsVideoSignal f) const
+HdrDpxVideoSignal HdrDpxFile::GetHeader(HdrDpxFieldsVideoSignal field) const
 {
 	return static_cast<HdrDpxVideoSignal>(m_dpx_header.TvHeader.VideoSignal);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsVideoIdentificationCode f, HdrDpxVideoIdentificationCode d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsVideoIdentificationCode field, HdrDpxVideoIdentificationCode value)
 {
-	m_dpx_header.TvHeader.VideoIdentificationCode = static_cast<uint8_t>(d);
+	m_dpx_header.TvHeader.VideoIdentificationCode = static_cast<uint8_t>(value);
 }
 
-HdrDpxVideoIdentificationCode HdrDpxFile::GetHeader(HdrDpxFieldsVideoIdentificationCode f) const
+HdrDpxVideoIdentificationCode HdrDpxFile::GetHeader(HdrDpxFieldsVideoIdentificationCode field) const
 {
 	return static_cast<HdrDpxVideoIdentificationCode>(m_dpx_header.TvHeader.VideoIdentificationCode);
 }
 
-void HdrDpxFile::SetHeader(HdrDpxFieldsByteOrder f, HdrDpxByteOrder d)
+void HdrDpxFile::SetHeader(HdrDpxFieldsByteOrder field, HdrDpxByteOrder value)
 {
-	m_byteorder = d;
+	m_byteorder = value;
 }
 
-HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder f) const
+HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder field) const
 {
 	return m_byteorder;
 }
@@ -1276,7 +1262,7 @@ void HdrDpxFile::SetUserData(std::string userid, std::vector<uint8_t> userdata)
 bool HdrDpxFile::GetUserData(std::string &userid, std::vector<uint8_t> &userdata) const
 {
 	if (m_dpx_header.FileHeader.UserSize == 0)		// nothing to do
-		return true;
+		return false;
 	userid = CopyToStringN(m_dpx_userdata.UserIdentification, 32);
 	userdata = m_dpx_userdata.UserData;
 	return true;
@@ -1322,9 +1308,9 @@ int HdrDpxFile::GetNumErrors(void)  const
 	return m_err.GetNumErrors();
 }
 
-void HdrDpxFile::GetError(int index, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg)
+void HdrDpxFile::GetError(int err_idx, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg)
 {
-	return m_err.GetError(index, errcode, severity, errmsg);
+	return m_err.GetError(err_idx, errcode, severity, errmsg);
 }
 
 void HdrDpxFile::ClearErrors()
@@ -1335,10 +1321,10 @@ void HdrDpxFile::ClearErrors()
 std::vector<uint8_t> HdrDpxFile::GetIEIndexList() const
 {
 	std::vector<uint8_t> ielist;
-	for (int ie = 0; ie < 8; ++ie)
+	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_IE[ie].m_isinitialized)
-			ielist.push_back(ie);
+		if (m_IE[ie_idx].m_isinitialized)
+			ielist.push_back(ie_idx);
 	}
 	return ielist;
 }

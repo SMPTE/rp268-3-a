@@ -147,6 +147,7 @@ enum bar_colors_e {
 	BLACK_M2P,
 	BLACK_P2P,
 	BLACK_P4P,
+	RAMP,
 	COLOR_MAX
 };
 enum comp_type_e {
@@ -172,6 +173,19 @@ public:
 	CBColor() { }
 	CBColor(uint8_t bpc, comp_type_e comptype, tf_type_e tftype, bool usefullrange)
 	{
+		m_ct = comptype;
+		if (usefullrange)
+		{
+			m_offset = 0;
+			m_range = (1 << bpc) - 1;
+			m_mid = 1 << (bpc - 1);
+		}
+		else
+		{
+			m_offset = 16 << (bpc - 8);
+			m_range = ((235 - 16) << (bpc - 8)) - 1;
+			m_mid = 1 << (bpc - 1);
+		}
 		// Values taken from SMTPE RP 209-2 and ITU-R BT.2111-1
 		if (comptype == CT_YCBCR)
 		{
@@ -420,9 +434,24 @@ public:
 			std::cerr << "CBColor: unsupported bit depth\n";
 		}
 	}
-	void GetComponents(bar_colors_e color, int32_t *d)
+	void GetComponents(bar_colors_e color, int32_t *d, float frac)
 	{
-		memcpy(d, m_colors[static_cast<int>(color)], sizeof(int32_t) * 3);
+		if (color == RAMP)
+		{
+			int32_t y;
+			y = (int32_t)(frac * m_range + m_offset + 0.5);
+			if (m_ct == CT_RGB)
+			{
+				d[0] = d[1] = d[2] = y;
+			}
+			else
+			{
+				d[0] = y;
+				d[1] = d[2] = m_mid;
+			}
+		}
+		else
+			memcpy(d, m_colors[static_cast<int>(color)], sizeof(int32_t) * 3);
 	}
 	bool m_isvalid = false;
 private:
@@ -433,6 +462,10 @@ private:
 		m_colors[c][2] = cr;
 	}
 	int32_t m_colors[COLOR_MAX][3];
+	comp_type_e m_ct;
+	int32_t m_offset;
+	int32_t m_range;
+	int32_t m_mid;
 };
 
 class CBRectangleList
@@ -506,6 +539,12 @@ public:
 		else if (y < ROUND_U32(9 * m_b / 12))
 		{
 			RECTANGLE_WIDTH(YELLOW_100, m_d);
+			rx = lx + 6 * m_c;
+			if (x < rx)
+			{
+				m_ramp_frac = ((float)(x - lx) / (rx - lx));
+				return (RAMP);
+			}
 			RECTANGLE_WIDTH(BLACK_0, 6 * m_c);  // Ramp not present
 			RECTANGLE_WIDTH(WHITE_100, m_c);
 			return RED_100;
@@ -525,6 +564,7 @@ public:
 			return GRAY_15;
 		}
 	}
+	float m_ramp_frac;
 
 private:
 	uint32_t m_a, m_b, m_c, m_d;
@@ -659,9 +699,13 @@ public:
 	{
 		return static_cast<uint8_t>(m_desc_list.size());
 	}
-	std::vector<IEDescriptor> m_desc_list;
+	IEDescriptor GetDescriptor(int idx)
+	{
+		return m_desc_list[idx];
+	}
 
 private:
+	std::vector<IEDescriptor> m_desc_list;
 	std::vector<Dpx::DatumLabel> GetLabelsFromString(std::string s)
 	{
 		std::string subs = s;
@@ -752,7 +796,6 @@ void generate_color_test(int argc, char *argv[])
 	Dpx::ErrorObject err;
 	std::string fname = "colorbar.dpx";
 	uint32_t width = 1920, height = 1080;
-	Dpx::HdrDpxFile dpxf;
 	comp_type_e ctype;
 	tf_type_e tftype = TF_PQ;
 	bool usefullrange = false;
@@ -763,12 +806,17 @@ void generate_color_test(int argc, char *argv[])
 	ColorBarGenerator cbgen;
 	CBColor colormap;
 	int32_t alphaval;
+	Dpx::HdrDpxDatumMappingDirection datum_mapping_direction = Dpx::eDatumMappingDirectionL2R; 
+	Dpx::HdrDpxByteOrder byte_order = Dpx::eNativeByteOrder;  
+	Dpx::HdrDpxPacking packing = Dpx::ePackingPacked;   // 0 => packed, 1 => method A, 2 => Method B
+	Dpx::HdrDpxEncoding rle_encoding = Dpx::eEncodingNoEncoding;
 
 	if ((argc % 2) != 1)
 	{
 		std::cerr << "Expected even number of command line parameters\n";
 		return;
 	}
+	// Note that command-line argument error checking is absent
 	for (int i = 1; i < argc; ++i)
 	{
 		if (!strcmp(argv[i], "-o"))
@@ -789,6 +837,20 @@ void generate_color_test(int argc, char *argv[])
 			width = static_cast<uint32_t>(atoi(argv[++i]));
 		else if (!strcmp(argv[i], "-h"))
 			height = static_cast<uint32_t>(atoi(argv[++i]));
+		else if (!strcmp(argv[i], "-dmd"))
+			datum_mapping_direction = (strcmp(argv[++i], "r2l") == 0) ? Dpx::eDatumMappingDirectionR2L : Dpx::eDatumMappingDirectionL2R;
+		else if (!strcmp(argv[i], "-order"))
+		{
+			byte_order = (strcmp(argv[i + 1], "msbf") == 0) ? Dpx::eMSBF : ((strcmp(argv[i + 1], "lsbf") == 0) ? Dpx::eLSBF : Dpx::eNativeByteOrder);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-packing"))
+		{
+			packing = (strcmp(argv[i + 1], "ma") == 0) ? Dpx::ePackingFilledMethodA : ((strcmp(argv[i + 1], "mb") == 0) ? Dpx::ePackingFilledMethodB : Dpx::ePackingPacked);
+			i++;
+		}
+		else if (!strcmp(argv[i], "-encoding"))
+			rle_encoding = (atoi(argv[++i]) == 1) ? Dpx::eEncodingRLE : Dpx::eEncodingNoEncoding;
 		else
 		{
 			std::cerr << "Unrecognized parameter: " << argv[i] << "\n";
@@ -817,15 +879,20 @@ void generate_color_test(int argc, char *argv[])
 
 	IEMapper iemap(corder, chroma, planar);
 
-	uint8_t ie_index = 0;
+	uint8_t ie_idx = 0;
+	// DPX library calls start here:
+	//  Create DPX file object
+	Dpx::HdrDpxFile dpxf;
 
-	// Initialization can (mostly) be in any order, but changes must be frozen before Open() call
+	// Initialization can be in any order, but changes must be frozen before OpenForWriting() call
 	dpxf.SetHeader(Dpx::ePixelsPerLine, width);
 	dpxf.SetHeader(Dpx::eLinesPerElement, height);
+	dpxf.SetHeader(Dpx::eDatumMappingDirection, datum_mapping_direction);
+	dpxf.SetHeader(Dpx::eByteOrder, byte_order);
 
-	for (auto desc : iemap.m_desc_list)
+	for(ie_idx=0; ie_idx < iemap.GetNumberOfIEs(); ++ie_idx)
 	{
-		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_index++);
+		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_idx);
 
 		if (bpc == 8)
 			ie->SetHeader(Dpx::eBitDepth, Dpx::eBitDepth8); // Bit depth needs to be set before low/high code values
@@ -839,9 +906,9 @@ void generate_color_test(int argc, char *argv[])
 			return;
 		}
 
-		ie->SetHeader(Dpx::eDescriptor, static_cast<Dpx::HdrDpxDescriptor>(desc.descriptor));
-		ie->SetHeader(Dpx::eEncoding, Dpx::eEncodingNoEncoding);
-		ie->SetHeader(Dpx::ePacking, Dpx::ePackingPacked);
+		ie->SetHeader(Dpx::eDescriptor, static_cast<Dpx::HdrDpxDescriptor>(iemap.GetDescriptor(ie_idx).descriptor));
+		ie->SetHeader(Dpx::eEncoding, rle_encoding);
+		ie->SetHeader(Dpx::ePacking, packing);
 
 		// Metadata fields can be set at any point
 		if (tftype == TF_SDR)
@@ -875,7 +942,7 @@ void generate_color_test(int argc, char *argv[])
 	}
 
 	// Start writing file
-	dpxf.WriteFile(fname);
+	dpxf.OpenForWriting(fname);
 	if (!dpxf.IsOk())
 	{
 		dump_error_log("File write message log:\n", dpxf);
@@ -883,40 +950,40 @@ void generate_color_test(int argc, char *argv[])
 
 	// If RLE enabled, rows must be written sequentially
 	// If RLE disabled, rows can be written in any order
-	ie_index = 0;
-	for (auto desc : iemap.m_desc_list)
+	for (ie_idx = 0; ie_idx < iemap.GetNumberOfIEs(); ++ie_idx)
 	{
-		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_index++);
+		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_idx);
 		std::vector<int32_t> datum_row;
-		datum_row.resize(width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1));
-		for (uint32_t row = 0; row < height / (desc.v_subs ? 2 : 1); ++row)
+		IEDescriptor desc = iemap.GetDescriptor(ie_idx);
+		datum_row.resize(ie->GetRowSizeInDatums());
+		for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 		{
-			uint32_t rowindex = 0;
-			for (uint32_t column = 0; column < width / (desc.h_subs ? 2 : 1); ++column)
+			uint32_t datum_idx = 0;
+			for (uint32_t column = 0; column < ie->GetWidth(); ++column)
 			{
 				int32_t cbcomps[3];
 				bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
-				colormap.GetComponents(color, cbcomps);
+				colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
 				for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
 				{
 					if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
-						datum_row[rowindex++] = alphaval;
+						datum_row[datum_idx++] = alphaval;
 					else if (dl == Dpx::DATUM_R || dl == Dpx::DATUM_Y)
-						datum_row[rowindex++] = cbcomps[0];
+						datum_row[datum_idx++] = cbcomps[0];
 					else if (dl == Dpx::DATUM_G || dl == Dpx::DATUM_CB)
-						datum_row[rowindex++] = cbcomps[1];
+						datum_row[datum_idx++] = cbcomps[1];
 					else if (dl == Dpx::DATUM_B || dl == Dpx::DATUM_CR)
-						datum_row[rowindex++] = cbcomps[2];
+						datum_row[datum_idx++] = cbcomps[2];
 					else if (dl == Dpx::DATUM_Y2)
 					{
 						color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
-						colormap.GetComponents(color, cbcomps);
-						datum_row[rowindex++] = cbcomps[0];
+						colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+						datum_row[datum_idx++] = cbcomps[0];
 					}
 				}
 			}
-			if (rowindex != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
-				printf("Row index not correct\n");
+			if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
+				printf("Unexpected datum index\n");
 			ie->App2DpxPixels(row, datum_row.data());
 		}
 	}

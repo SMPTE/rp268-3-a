@@ -45,13 +45,7 @@
 
 using namespace std;
 
-void example_read(void);
-void example_write(void);
-
-extern "C"
-{
-	int conv_main(int argc, char *argv[]);
-}
+void dump_dpx(int argc, char **argv);
 
 // returns number of TCHARs in string
 int wstrlen(_TCHAR * wstr)
@@ -105,8 +99,7 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
 
-	example_read();
-	//example_write();
+	dump_dpx(argc, argn);
 
 	release_argn(argc, argn);
 	return(0);
@@ -140,13 +133,23 @@ inline string tohex(uint8_t v)
 }
 
 // Example calling sequence for HDR DPX read:
-void example_read()
+void dump_dpx(int argc, char **argv)
 {
-	std::string filename("colorbar.dpx");
-	Dpx::HdrDpxFile  f(filename);
 	Dpx::HdrDpxImageElement *ie;
 	std::string userid, sbmdesc;
 	std::vector<uint8_t> userdata, sbmdata;
+
+	if (argc < 2)
+	{
+		std::cerr << "Usage: dump_dpx <dpxfile>\n";
+		return;
+	}
+	std::string filename_in = std::string(argv[1]);
+
+	std::string filename(argv[1]);
+
+	// Shorthand to open a DPX file for reading
+	Dpx::HdrDpxFile  f(filename);
 
 	if (!f.IsOk())   // can't open, unrecognized format
 	{
@@ -190,9 +193,9 @@ void example_read()
 		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
 		{
 			std::cout << "Hex bytes:\n";
-			for (int i = 0; i < userdata.size(); ++i)
+			for (int i = 0; i < sbmdata.size(); ++i)
 			{
-				std::cout << tohex(userdata[i]) << " ";
+				std::cout << tohex(sbmdata[i]) << " ";
 				if ((i & 0xf) == 0xf)
 					std::cout << "\n";
 			}
@@ -200,66 +203,70 @@ void example_read()
 		else   // Print as string
 		{
 			std::cout << f.GetHeader(Dpx::eSBMetadata);
+			// Alternatively:
+			//char *c = (char *)sbmdata.data();
+			//std::cout << std::string(c);
 		}
 
 		std::cout << "\n";
 	}
 
-	for(auto src_ie_index : f.GetIEIndexList())
+	for(auto src_ie_idx : f.GetIEIndexList())
 	{ 
-		ie = f.GetImageElement(src_ie_index);
-		std::cout << "Component types for image element " << src_ie_index << ": ";
+		ie = f.GetImageElement(src_ie_idx);
+		std::cout << "Component types for image element " << src_ie_idx << ": ";
 		for (auto c : ie->GetDatumLabels())
 			std::cout << ie->DatumLabelToName(c) << " ";
 		std::cout << "\n";
 		for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 		{
-			if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth32)
+			std::cout << "\n" << row << ": ";
+			if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR32)  // 32-bit float
 			{
 				std::vector<float> rowdata;
-				uint32_t rowidx = 0;
-				rowdata.resize(ie->GetRowSizeInBytes());
+				uint32_t datum_idx = 0;
+				rowdata.resize(ie->GetRowSizeInDatums());
 				ie->Dpx2AppPixels(row, static_cast<float *>(rowdata.data()));
-				for (uint32_t x = 0; x < ie->GetWidth(); ++x)
-				{
-					std::cout << "(" << x << ", " << row << ") = ";
-					for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+				while(datum_idx < ie->GetWidth() * ie->GetNumberOfComponents())
+				{ 
+					std::cout << "(";
+					for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 					{
-						std::cout << rowdata[rowidx++] << ",";
+						std::cout << rowdata[datum_idx++] << ",";
 					}
-					std::cout << "\n";
+					std::cout << rowdata[datum_idx++] << ") ";
 				}
 			}
-			else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth64)
+			else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR64)  // 64-bit float
 			{
 				std::vector<double> rowdata;
-				uint32_t rowidx = 0;
-				rowdata.resize(ie->GetRowSizeInBytes());
+				uint32_t datum_idx = 0;
+				rowdata.resize(ie->GetRowSizeInDatums());
 				ie->Dpx2AppPixels(row, static_cast<double *>(rowdata.data()));
 				for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 				{
-					std::cout << "(" << x << ", " << row << ") = ";
-					for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+					std::cout << "(";
+					for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 					{
-						std::cout << rowdata[rowidx++] << ",";
+						std::cout << rowdata[datum_idx++] << ",";
 					}
-					std::cout << "\n";
+					std::cout << rowdata[datum_idx++] << ") ";
 				}
 			}
 			else
 			{
 				std::vector<int32_t> rowdata;
-				int32_t rowidx = 0;
-				rowdata.resize(ie->GetRowSizeInBytes());
+				int32_t datum_idx = 0;
+				rowdata.resize(ie->GetRowSizeInDatums());
 				ie->Dpx2AppPixels(row, static_cast<int32_t *>(rowdata.data()));
 				for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 				{
-					std::cout << "(" << x << ", " << row << ") = ";
+					std::cout << "(";
 					for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 					{
-						std::cout << rowdata[rowidx++] << ",";
+						std::cout << rowdata[datum_idx++] << ",";
 					}
-					std::cout << rowdata[rowidx++] << "\n";
+					std::cout << rowdata[datum_idx++] << ") ";
 				}
 			}
 		}

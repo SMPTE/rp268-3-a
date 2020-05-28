@@ -452,6 +452,16 @@ void HdrDpxImageElement::OpenForReading(bool bswap)
 
 void HdrDpxImageElement::OpenForWriting(bool bswap)
 {
+	if (m_dpx_ie_ptr->Descriptor == eDescUndefined)
+	{
+		LOG_ERROR(eFileWriteError, eFatal, "Cannot write image element " + std::to_string(m_ie_index + 1) + " without descriptor field");
+		return;
+	}
+	if (m_dpx_ie_ptr->BitSize == eBitDepthUndefined)
+	{
+		LOG_ERROR(eFileWriteError, eFatal, "Cannot write image element " + std::to_string(m_ie_index + 1) + " without bit depth field");
+		return;
+	}
 	m_is_h_subsampled = m_is_v_subsampled = false;
 	if (m_dpx_ie_ptr->Descriptor == eDescCb || m_dpx_ie_ptr->Descriptor == eDescCr)
 		m_is_h_subsampled = m_is_v_subsampled = true;
@@ -469,15 +479,6 @@ void HdrDpxImageElement::OpenForWriting(bool bswap)
 	m_is_header_locked = true;
 }
 
-uint32_t HdrDpxImageElement::ComputeWidth(uint32_t w)
-{
-	return w >> (m_is_h_subsampled ? 1 : 0);
-}
-
-uint32_t HdrDpxImageElement::ComputeHeight(uint32_t h)
-{
-	return h >> (m_is_v_subsampled ? 1 : 0);
-}
 
 void HdrDpxImageElement::LockHeader(void)
 {
@@ -524,13 +525,18 @@ uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 	return idw_per_line * 4;
 }
 
+uint32_t HdrDpxImageElement::GetRowSizeInDatums() const
+{
+	return GetWidth() * GetNumberOfComponents();
+}
+
 uint32_t HdrDpxImageElement::GetOffsetForRow(uint32_t row)
 {
 
 	return m_dpx_ie_ptr->DataOffset + GetRowSizeInBytes(true) * row;
 }
 
-void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *d)
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
 {
 
 	if (!m_isinitialized)
@@ -551,11 +557,11 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *d)
 	
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_int_row = d;
+	m_int_row = datum_ptr;
 	ReadRow(row);
 }
 
-void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *d)
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *datum_ptr)
 {
 
 	if (!m_isinitialized)
@@ -576,11 +582,11 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *d)
 
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_float_row = d;
+	m_float_row = datum_ptr;
 	ReadRow(row);
 }
 
-void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *d)
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *datum_ptr)
 {
 
 	if (!m_isinitialized)
@@ -601,7 +607,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *d)
 
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_double_row = d;
+	m_double_row = datum_ptr;
 	ReadRow(row);
 }
 
@@ -971,7 +977,7 @@ void HdrDpxImageElement::WriteLineEnd(Fifo *fifo)
 }
 
 
-void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *d)
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *datum_ptr)
 {
 	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
 	if (!m_isinitialized)
@@ -992,11 +998,11 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *d)
 
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_int_row = d;
+	m_int_row = datum_ptr;
 	WriteRow(row);
 }
 
-void HdrDpxImageElement::App2DpxPixels(uint32_t row, float *d)
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, float *datum_ptr)
 {
 	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
 	if (!m_isinitialized)
@@ -1017,11 +1023,11 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, float *d)
 
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_float_row = d;
+	m_float_row = datum_ptr;
 	WriteRow(row);
 }
 
-void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *d)
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *datum_ptr)
 {
 	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
 	if (!m_isinitialized)
@@ -1042,7 +1048,7 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *d)
 
 	uint8_t num_components = GetNumberOfComponents();
 
-	m_double_row = d;
+	m_double_row = datum_ptr;
 	WriteRow(row);
 }
 
@@ -1094,6 +1100,8 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	xpos = 0;
 
 	// write
+	if (row == 720)
+		row = 720;			//// DEBUG
 	row_wr_idx = 0;
 	m_row_rd_idx = 0;
 	xpos = 0;
@@ -1105,6 +1113,7 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 			{
 				WriteDatum(&fifo, 2);  // Indicates run of 1 pixel
 				WritePixel(&fifo, xpos);
+				xpos++;
 			}
 			else {
 				for (component = 0; component < num_components; ++component)
@@ -1112,10 +1121,28 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 					rle_pixel[component] = m_int_row[xpos * num_components + component];
 				}
 				run_type = IsNextSame(xpos, rle_pixel);
-				for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
+				if (run_type)  //  Same run
 				{
-					if (IsNextSame(xpos + run_length, rle_pixel) != run_type)
-						break;
+					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
+					{
+						if (IsNextSame(xpos + run_length, rle_pixel) != run_type)
+							break;
+					}
+				}
+				else   // Different run
+				{
+					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
+					{
+						for (component = 0; component < num_components; ++component)
+						{
+							rle_pixel[component] = m_int_row[(xpos + run_length) * num_components + component];
+						}
+						if (IsNextSame(xpos + run_length, rle_pixel) != run_type)
+						{
+							run_length--;
+							break;
+						}
+					}
 				}
 				run_length++;
 				if (run_type)
@@ -1123,14 +1150,18 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 					WriteDatum(&fifo, 1 | (run_length << 1));
 					WritePixel(&fifo, xpos);
 					xpos += run_length;
+					if (xpos > m_width)
+						std::cout << "Something went wrong";
 				}
 				else
 				{
 					WriteDatum(&fifo, 0 | (run_length << 1));
-					while (run_length)
+					while (run_length--)
 					{
 						WritePixel(&fifo, xpos);
 						xpos++;
+						if (xpos > m_width)
+							std::cout << "Something went wrong";
 					}
 				}
 			}
@@ -1141,6 +1172,8 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 			{
 				WritePixel(&fifo, xpos);
 				xpos++;
+				if (xpos > m_width)
+					std::cout << "Something went wrong";
 			}
 		}
 
@@ -1175,50 +1208,50 @@ void HdrDpxImageElement::ResetWarnings(void)
 	m_warn_zero_run_length = false;
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsDataSign f, HdrDpxDataSign d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsDataSign field, HdrDpxDataSign value)
 {
 	if (m_is_header_locked)
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
-	m_dpx_ie_ptr->DataSign = static_cast<uint8_t>(d);
+	m_dpx_ie_ptr->DataSign = static_cast<uint8_t>(value);
 }
 
-HdrDpxDataSign HdrDpxImageElement::GetHeader(HdrDpxFieldsDataSign f) const
+HdrDpxDataSign HdrDpxImageElement::GetHeader(HdrDpxFieldsDataSign field) const
 {
 	return static_cast<HdrDpxDataSign>(m_dpx_ie_ptr->DataSign);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsR32 f, float d)
+void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsR32 field, float value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	switch (f)
+	switch (field)
 	{
 	case eReferenceLowDataCode:
 		if (m_dpx_ie_ptr->BitSize >= 32)
-			m_dpx_ie_ptr->LowData.f = d;
+			m_dpx_ie_ptr->LowData.f = value;
 		else
-			m_dpx_ie_ptr->LowData.d = (uint32_t)(d + 0.5); // Could add bounds checking
+			m_dpx_ie_ptr->LowData.d = (uint32_t)(value + 0.5); // Could add bounds checking
 		break;
 	case eReferenceLowQuantity:
-		m_dpx_ie_ptr->LowQuantity = d;
+		m_dpx_ie_ptr->LowQuantity = value;
 		break;
 	case eReferenceHighDataCode:
 		if (m_dpx_ie_ptr->BitSize >= 32)
-			m_dpx_ie_ptr->HighData.f = d;
+			m_dpx_ie_ptr->HighData.f = value;
 		else
-			m_dpx_ie_ptr->HighData.d = (uint32_t)(d + 0.5);
+			m_dpx_ie_ptr->HighData.d = (uint32_t)(value + 0.5);
 		break;
 	case eReferenceHighQuantity:
-		m_dpx_ie_ptr->HighQuantity = d;
+		m_dpx_ie_ptr->HighQuantity = value;
 	}
 }
 
-float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 f) const
+float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eReferenceLowDataCode:
 		if (m_dpx_ie_ptr->BitSize >= 32)
@@ -1239,127 +1272,127 @@ float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 f) const
 }
 
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsDescriptor f, HdrDpxDescriptor d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsDescriptor field, HdrDpxDescriptor value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	m_dpx_ie_ptr->Descriptor = static_cast<uint8_t>(d);
+	m_dpx_ie_ptr->Descriptor = static_cast<uint8_t>(value);
 }
 
-HdrDpxDescriptor HdrDpxImageElement::GetHeader(HdrDpxFieldsDescriptor f) const
+HdrDpxDescriptor HdrDpxImageElement::GetHeader(HdrDpxFieldsDescriptor field) const
 {
 	return static_cast<HdrDpxDescriptor>(m_dpx_ie_ptr->Descriptor);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsTransfer f, HdrDpxTransfer d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsTransfer field, HdrDpxTransfer value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	m_dpx_ie_ptr->Transfer = static_cast<uint8_t>(d);
+	m_dpx_ie_ptr->Transfer = static_cast<uint8_t>(value);
 }
 
-HdrDpxTransfer HdrDpxImageElement::GetHeader(HdrDpxFieldsTransfer f) const
+HdrDpxTransfer HdrDpxImageElement::GetHeader(HdrDpxFieldsTransfer field) const
 {
 	return static_cast<HdrDpxTransfer>(m_dpx_ie_ptr->Transfer);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorimetric f, HdrDpxColorimetric d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorimetric field, HdrDpxColorimetric value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	m_dpx_ie_ptr->Colorimetric = static_cast<uint8_t>(d);
+	m_dpx_ie_ptr->Colorimetric = static_cast<uint8_t>(value);
 }
 
-HdrDpxColorimetric HdrDpxImageElement::GetHeader(HdrDpxFieldsColorimetric f) const
+HdrDpxColorimetric HdrDpxImageElement::GetHeader(HdrDpxFieldsColorimetric field) const
 {
 	return static_cast<HdrDpxColorimetric>(m_dpx_ie_ptr->Colorimetric);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth f, HdrDpxBitDepth d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth field, HdrDpxBitDepth value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	if ((m_dpx_ie_ptr->BitSize <= 16 && (d == 32 || d == 64)) ||
-		((m_dpx_ie_ptr->BitSize == 32 || m_dpx_ie_ptr->BitSize==64) && d<=16))
+	if ((m_dpx_ie_ptr->BitSize <= 16 && (value == 32 || value == 64)) ||
+		((m_dpx_ie_ptr->BitSize == 32 || m_dpx_ie_ptr->BitSize==64) && value<=16))
 	{
 		LOG_ERROR(eNoError, eInformational, "Changing bit depth invalidates previous low/high code values");
 		m_dpx_ie_ptr->HighData.d = UINT32_MAX;
 		m_dpx_ie_ptr->LowData.d = UINT32_MAX;
 	}
-	m_dpx_ie_ptr->BitSize = static_cast<uint8_t>(d);
+	m_dpx_ie_ptr->BitSize = static_cast<uint8_t>(value);
 	
 }
 
-HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth f) const
+HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth field) const
 {
 	return static_cast<HdrDpxBitDepth>(m_dpx_ie_ptr->BitSize);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsPacking f, HdrDpxPacking d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsPacking field, HdrDpxPacking value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	m_dpx_ie_ptr->Packing = static_cast<uint16_t>(d);
+	m_dpx_ie_ptr->Packing = static_cast<uint16_t>(value);
 }
 
-HdrDpxPacking HdrDpxImageElement::GetHeader(HdrDpxFieldsPacking f) const
+HdrDpxPacking HdrDpxImageElement::GetHeader(HdrDpxFieldsPacking field) const
 {
 	return static_cast<HdrDpxPacking>(m_dpx_ie_ptr->Packing);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsEncoding f, HdrDpxEncoding d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsEncoding field, HdrDpxEncoding value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	m_dpx_ie_ptr->Encoding = static_cast<uint16_t>(d);
+	m_dpx_ie_ptr->Encoding = static_cast<uint16_t>(value);
 }
 
-HdrDpxEncoding HdrDpxImageElement::GetHeader(HdrDpxFieldsEncoding f) const
+HdrDpxEncoding HdrDpxImageElement::GetHeader(HdrDpxFieldsEncoding field) const
 {
 	return static_cast<HdrDpxEncoding>(m_dpx_ie_ptr->Encoding);
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsU32 f, uint32_t d)
+void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsU32 field, uint32_t value)
 {
 	if (m_is_header_locked)
 	{
 		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
 		return;
 	}
-	switch (f)
+	switch (field)
 	{
 	case eOffsetToData:
-		m_dpx_ie_ptr->DataOffset = d;
+		m_dpx_ie_ptr->DataOffset = value;
 		break;
 	case eEndOfLinePadding:
-		m_dpx_ie_ptr->EndOfLinePadding = d;
+		m_dpx_ie_ptr->EndOfLinePadding = value;
 		break;
 	case eEndOfImagePadding:
-		m_dpx_ie_ptr->EndOfImagePadding = d;
+		m_dpx_ie_ptr->EndOfImagePadding = value;
 	}
 }
 
-uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f) const
+uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 field) const
 {
-	switch (f)
+	switch (field)
 	{
 	case eOffsetToData:
 		return m_dpx_ie_ptr->DataOffset;
@@ -1371,7 +1404,7 @@ uint32_t HdrDpxImageElement::GetHeader(HdrDpxIEFieldsU32 f) const
 	return 0;
 }
 
-void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorDifferenceSiting f, HdrDpxColorDifferenceSiting d)
+void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorDifferenceSiting field, HdrDpxColorDifferenceSiting value)
 {
 	if (m_is_header_locked)
 	{
@@ -1380,10 +1413,10 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsColorDifferenceSiting f, HdrDpxCo
 	}
 	uint32_t bitmask = ~(0xf << (4 * m_ie_index));
 	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling &= bitmask;
-	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling |= static_cast<uint32_t>(d) << (4 * m_ie_index);
+	m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling |= static_cast<uint32_t>(value) << (4 * m_ie_index);
 }
 
-HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDifferenceSiting f) const
+HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDifferenceSiting field) const
 {
 	return static_cast<HdrDpxColorDifferenceSiting>(m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling >> (m_ie_index * 4) & 0xf);
 }

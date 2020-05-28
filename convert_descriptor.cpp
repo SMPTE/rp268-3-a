@@ -184,7 +184,6 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 //   RGBA
 //   ABGR
 
-// Example calling sequence for HDR DPX read:
 void convert_descriptor(int argc, char ** argv)
 {
 	if (argc < 5)
@@ -199,8 +198,11 @@ void convert_descriptor(int argc, char ** argv)
 	std::string filename_out = std::string(argv[2]);
 	std::string order = std::string(argv[3]);
 	bool planar = (atoi(argv[4]) == 1);
+	// User might add error checking code here
 
+	// Create and open f_in for reading:
 	Dpx::HdrDpxFile  f_in(filename_in);
+	
 	Dpx::HdrDpxFile  f_out;
 	Dpx::HdrDpxImageElement *ie_in, *ie_out;
 	std::string userid, sbmdesc;
@@ -215,7 +217,7 @@ void convert_descriptor(int argc, char ** argv)
 
 	if (!f_in.IsHdr())
 	{
-		// Code to handle V1.0/V2.0 DPX files
+		// User might add code to handle V1.0/V2.0 DPX files
 
 		std::cout << "DPX header:\n" << f_in.DumpHeader();
 		return;
@@ -231,14 +233,15 @@ void convert_descriptor(int argc, char ** argv)
 	bool ud_present = f_in.GetUserData(userid, userdata);
 	bool sbm_present = f_in.GetStandardsBasedMetadata(sbmdesc, sbmdata);
 
-	// Note that the following does not copy IE headers:
+	// Copy header info from f_in to f_out...
+	// note that the following does not copy IE headers:
 	f_out.CopyHeaderFrom(f_in);
 	if (ud_present)
 		f_out.SetUserData(userid, userdata);
 	if (sbm_present)
 	{
 		f_out.SetStandardsBasedMetadata(sbmdesc, sbmdata);
-		f_out.SetHeader(Dpx::eStandardsBasedMetadataOffset, Dpx::eSBMAutoLocate);
+		f_out.SetHeader(Dpx::eStandardsBasedMetadataOffset, Dpx::eSBMAutoLocate);  // Auto-locate means the DPX writer puts the standards-based metadata right after the last image data
 	}
 
 	// Build destination IE types
@@ -283,26 +286,26 @@ void convert_descriptor(int argc, char ** argv)
 		}
 	}
 
-	// Configure descriptor headers
+	// Configure output image element headers
 	std::vector<uint8_t> src_ie_list = f_in.GetIEIndexList();
-	uint8_t out_ie_index = 0;
-	for (auto d : dest_ie_desc_list)
+	for (uint8_t out_ie_idx = 0; out_ie_idx < dest_ie_desc_list.size(); ++out_ie_idx)
 	{
-		ie_out = f_out.GetImageElement(out_ie_index);
-		ie_out->CopyHeaderFrom(f_in.GetImageElement(src_ie_list[0]));
-		ie_out->SetHeader(Dpx::eDescriptor, d);
-		ie_out->SetHeader(Dpx::eOffsetToData, Dpx::eOffsetAutoLocate);
-		out_ie_index++;
+		ie_out = f_out.GetImageElement(out_ie_idx);
+		ie_out->CopyHeaderFrom(f_in.GetImageElement(src_ie_list[0]));  // All IE headers match the first one from the source
+		ie_out->SetHeader(Dpx::eDescriptor, dest_ie_desc_list[out_ie_idx]);
+		ie_out->SetHeader(Dpx::eOffsetToData, Dpx::eOffsetAutoLocate);  // Auto-locate means the DPX writer puts image elements sequentially following the main header
 	}
 
 	// Start writing
-	f_out.WriteFile(filename_out);
+	f_out.OpenForWriting(filename_out);
 
-	out_ie_index = 0;
+	// If RLE enabled, rows must be written sequentially
+	// If RLE disabled, rows can be written in any order
+	// Because we wanted to support RLE, we loop over IEs then rows. If RLE is not a consideration, the loops can be switched
 	// Loop over destination IEs
-	for(auto dest_desc : dest_ie_desc_list)
+	for(uint8_t out_ie_idx = 0; out_ie_idx < dest_ie_desc_list.size(); ++out_ie_idx)
 	{ 
-		std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest_desc);
+		std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest_ie_desc_list[out_ie_idx]);
 		std::vector<int32_t> datum_row_out;
 		std::vector<int32_t> datum_row_in[8];
 		std::vector<Dpx::DatumLabel> dl_src[8];
@@ -311,6 +314,7 @@ void convert_descriptor(int argc, char ** argv)
 		std::vector<int> datum_loc;
 		std::vector<Dpx::HdrDpxDescriptor> ie_desc_list;
 
+		// Create map of IEs
 		ie_desc_list.resize(8);
 
 		for (auto src_ie_index : src_ie_list)
@@ -321,46 +325,46 @@ void convert_descriptor(int argc, char ** argv)
 			datum_row_in[src_ie_index].resize(datum_stride[src_ie_index] * f_in.GetHeader(Dpx::ePixelsPerLine));
 		}
 
-		build_datum_map(dest_desc, ie_desc_list, datum_ie_map, datum_loc);
+		build_datum_map(dest_ie_desc_list[out_ie_idx], ie_desc_list, datum_ie_map, datum_loc);
 
-		ie_out = f_out.GetImageElement(out_ie_index);
+		ie_out = f_out.GetImageElement(out_ie_idx);
 		datum_row_out.resize(dl_dest.size() * f_in.GetHeader(Dpx::ePixelsPerLine));
 		maxval = (1 << static_cast<uint8_t>(ie_out->GetHeader(Dpx::eBitDepth))) - 1;
 
-		for(uint32_t y = 0; y < f_in.GetHeader(Dpx::eLinesPerElement); ++y)
+		for(uint32_t row = 0; row < f_in.GetHeader(Dpx::eLinesPerElement); ++row)
 		{
 			bool row_read[8] = {
 				false, false, false, false, false, false, false, false
 			};
+			uint8_t num_components_out = ie_out->GetNumberOfComponents();
 
 			// Read the rows we need
-			for (int c = 0; c < dl_dest.size(); ++c)
+			for (int component = 0; component < num_components_out; ++component)
 			{
-				ie_in = f_in.GetImageElement(datum_ie_map[c]);
-				if (!row_read[datum_ie_map[c]])
+				ie_in = f_in.GetImageElement(datum_ie_map[component]);
+				if (!row_read[datum_ie_map[component]])
 				{
-					ie_in->Dpx2AppPixels(y, datum_row_in[datum_ie_map[c]].data());
-					row_read[datum_ie_map[c]] = true;
+					ie_in->Dpx2AppPixels(row, datum_row_in[datum_ie_map[component]].data());
+					row_read[datum_ie_map[component]] = true;
 				}
 			}
 
-			for (uint32_t x = 0; x < f_in.GetHeader(Dpx::ePixelsPerLine); ++x)
+			for (uint32_t column = 0; column < f_in.GetHeader(Dpx::ePixelsPerLine); ++column)
 			{
-				for (int c = 0; c < dl_dest.size(); ++c)
+				for (int component = 0; component < num_components_out; ++component)
 				{
-					if (datum_ie_map[c] == -1)
+					if (datum_ie_map[component] == -1)
 					{
-						if (dl_dest[c] == Dpx::DATUM_A)
-							datum_row_out[x * dl_dest.size() + c] = maxval;
+						if (dl_dest[component] == Dpx::DATUM_A)
+							datum_row_out[column * num_components_out + component] = maxval;
 						else
 							std::cerr << "Unrecognized datum\n";
 					} else
-						datum_row_out[x * dl_dest.size() + c] = datum_row_in[datum_ie_map[c]][x * datum_stride[datum_ie_map[c]] + datum_loc[c]];
+						datum_row_out[column * num_components_out + component] = datum_row_in[datum_ie_map[component]][column * datum_stride[datum_ie_map[component]] + datum_loc[component]];
 				}
 			}
-			ie_out->App2DpxPixels(y, datum_row_out.data());
+			ie_out->App2DpxPixels(row, datum_row_out.data());
 		}
-		out_ie_index++;
 	}
 
 	f_in.Close();
