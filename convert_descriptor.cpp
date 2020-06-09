@@ -189,7 +189,7 @@ void convert_descriptor(int argc, char ** argv)
 	if (argc < 5)
 	{
 		std::cerr << "Usage: convert_descriptor input.dpx output.dpx <neworder> <planar>\n";
-		std::cerr << "  <neworder> : RGB, BGRA, etc. (components must match source file; if A is added all A values will be set to 1.0)\n";
+		std::cerr << "  <neworder> : RGB, BGRA, etc. Components must be present in source file except A; if A is not present all output A values will be set to 1.0)\n";
 		std::cerr << "  <planar> : 0 means use interleaved format in single IE, 1 means split components into separate planes, one per IE\n";
 		return;
 	}
