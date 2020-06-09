@@ -33,6 +33,8 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <cstring>
+#include <cmath>
 #include "hdr_dpx.h"
 
 #ifdef NDEBUG

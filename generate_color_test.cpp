@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
 #include <iostream>
@@ -47,6 +46,9 @@
 
 using namespace std;
 
+
+#ifdef _MSC_VER
+#include <tchar.h>
 
 // returns number of TCHARs in string
 int wstrlen(_TCHAR * wstr)
@@ -96,7 +98,7 @@ void release_argn(int argc, char ** nargv)
     free(nargv);
 }
 
-void generate_color_test(int argc, char *argv[]);
+int generate_color_test(int argc, char *argv[]);
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -107,7 +109,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	release_argn(argc, argn);
 	return(0);
 }
-
+#endif
 
 static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
@@ -791,7 +793,11 @@ private:
 //   ABGR
 
 // Example calling sequence for HDR DPX write (single image element case):
-void generate_color_test(int argc, char *argv[])
+#ifdef _MSC_VER
+int generate_color_test(int argc, char *argv[])
+#else
+int main(int argc, char *argv[])
+#endif
 {
 	Dpx::ErrorObject err;
 	std::string fname = "colorbar.dpx";
@@ -814,7 +820,7 @@ void generate_color_test(int argc, char *argv[])
 	if ((argc % 2) != 1)
 	{
 		std::cerr << "Expected even number of command line parameters\n";
-		return;
+		return 1;
 	}
 	// Note that command-line argument error checking is absent
 	for (int i = 1; i < argc; ++i)
@@ -854,7 +860,7 @@ void generate_color_test(int argc, char *argv[])
 		else
 		{
 			std::cerr << "Unrecognized parameter: " << argv[i] << "\n";
-			return;
+			return 1;
 		}
 	}
 
@@ -863,7 +869,7 @@ void generate_color_test(int argc, char *argv[])
 	if (chroma != 444 && chroma != 422 && chroma != 420)
 	{
 		std::cerr << "invalid chroma option (needs to be 444, 422, or 420)\n";
-		return;
+		return 1;
 	}
 	if (corder.find("R") != std::string::npos)
 		ctype = CT_RGB;
@@ -874,7 +880,7 @@ void generate_color_test(int argc, char *argv[])
 	if (!colormap.m_isvalid)
 	{
 		std::cerr << "Invalid color test configuration\n";
-		return;
+		return 1;
 	}
 
 	IEMapper iemap(corder, chroma, planar);
@@ -903,7 +909,7 @@ void generate_color_test(int argc, char *argv[])
 		else
 		{
 			std::cerr << "Invalid bit depth\n";
-			return;
+			return 1;
 		}
 
 		ie->SetHeader(Dpx::eDescriptor, static_cast<Dpx::HdrDpxDescriptor>(iemap.GetDescriptor(ie_idx).descriptor));
@@ -990,4 +996,5 @@ void generate_color_test(int argc, char *argv[])
 
 	// Close() automatically called if HdrDpxFile goes out of scope
 	dpxf.Close();
+	return 0;
 }

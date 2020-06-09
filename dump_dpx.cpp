@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
 #include <iostream>
@@ -45,7 +44,10 @@
 
 using namespace std;
 
-void dump_dpx(int argc, char **argv);
+#ifdef _MSC_VER
+#include <tchar.h>
+
+int dump_dpx(int argc, char **argv);
 
 // returns number of TCHARs in string
 int wstrlen(_TCHAR * wstr)
@@ -104,7 +106,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	release_argn(argc, argn);
 	return(0);
 }
-
+#endif
 
 static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
@@ -133,7 +135,11 @@ inline string tohex(uint8_t v)
 }
 
 // Example calling sequence for HDR DPX read:
-void dump_dpx(int argc, char **argv)
+#ifdef _MSC_VER
+int dump_dpx(int argc, char **argv)
+#else
+int main(int argc, char *argv[])
+#endif
 {
 	Dpx::HdrDpxImageElement *ie;
 	std::string userid, sbmdesc;
@@ -142,7 +148,7 @@ void dump_dpx(int argc, char **argv)
 	if (argc < 2)
 	{
 		std::cerr << "Usage: dump_dpx <dpxfile>\n";
-		return;
+		return 0;
 	}
 	std::string filename_in = std::string(argv[1]);
 
@@ -154,7 +160,7 @@ void dump_dpx(int argc, char **argv)
 	if (!f.IsOk())   // can't open, unrecognized format
 	{
 		dump_error_log("Read failed:\n", f);
-		return;// Code to handle failure to open
+		return 1;// Code to handle failure to open
 	}
 
 	if (!f.IsHdr())
@@ -162,7 +168,7 @@ void dump_dpx(int argc, char **argv)
 		// Code to handle V1.0/V2.0 DPX files
 
 		std::cout << "DPX header:\n" << f.DumpHeader();
-		return;
+		return 0;
 	}
 
 	if (f.Validate())  // fields have to be valid, at least 1 image element, image data is interpretable, not out of bounds for offsets
@@ -272,5 +278,6 @@ void dump_dpx(int argc, char **argv)
 		}
 	}
 	f.Close();
+	return 0;
 }
 

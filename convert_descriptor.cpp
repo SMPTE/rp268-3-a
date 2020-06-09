@@ -36,7 +36,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <tchar.h>
 #include <assert.h>
 #include "hdr_dpx.h"
 #include <iostream>
@@ -45,7 +44,10 @@
 
 using namespace std;
 
-void convert_descriptor(int argc, char ** argv);
+#ifdef _MSC_VER
+#include <tchar.h>
+
+int convert_descriptor(int argc, char ** argv);
 
 // returns number of TCHARs in string
 int wstrlen(_TCHAR * wstr)
@@ -104,7 +106,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	release_argn(argc, argn);
 	return(0);
 }
-
+#endif
 
 static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
@@ -183,15 +185,18 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 //   RGB
 //   RGBA
 //   ABGR
-
-void convert_descriptor(int argc, char ** argv)
+#ifdef _MSC_VER
+int convert_descriptor(int argc, char ** argv)
+#else
+int main(int argc, char *argv[])
+#endif
 {
 	if (argc < 5)
 	{
 		std::cerr << "Usage: convert_descriptor input.dpx output.dpx <neworder> <planar>\n";
 		std::cerr << "  <neworder> : RGB, BGRA, etc. Components must be present in source file except A; if A is not present all output A values will be set to 1.0)\n";
 		std::cerr << "  <planar> : 0 means use interleaved format in single IE, 1 means split components into separate planes, one per IE\n";
-		return;
+		return 0;
 	}
 
 	std::string filename_in = std::string(argv[1]);
@@ -212,7 +217,7 @@ void convert_descriptor(int argc, char ** argv)
 	if (!f_in.IsOk())   // can't open, unrecognized format
 	{
 		dump_error_log("Read failed:\n", f_in);
-		return;// Code to handle failure to open
+		return 1;// Code to handle failure to open
 	}
 
 	if (!f_in.IsHdr())
@@ -220,7 +225,7 @@ void convert_descriptor(int argc, char ** argv)
 		// User might add code to handle V1.0/V2.0 DPX files
 
 		std::cout << "DPX header:\n" << f_in.DumpHeader();
-		return;
+		return 0;
 	}
 
 	if (f_in.Validate())  // fields have to be valid, at least 1 image element, image data is interpretable, not out of bounds for offsets
@@ -261,7 +266,7 @@ void convert_descriptor(int argc, char ** argv)
 			else
 			{
 				std::cerr << "Unkown component type " << order.substr(idx, 1) << "\n";
-				return;
+				return 1;
 			}
 		}
 	}
@@ -282,7 +287,7 @@ void convert_descriptor(int argc, char ** argv)
 		else
 		{
 			std::cerr << "Unkown component descriptor " << order << "\n";
-			return;
+			return 1;
 		}
 	}
 
@@ -369,5 +374,6 @@ void convert_descriptor(int argc, char ** argv)
 
 	f_in.Close();
 	f_out.Close();
+	return 0;
 }
 

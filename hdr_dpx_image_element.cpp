@@ -33,6 +33,7 @@
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <cmath>
 #include "hdr_dpx.h"
 #include "fifo.h"
 
@@ -510,15 +511,15 @@ uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 	else if (m_dpx_ie_ptr->BitSize == 32)
 		idw_per_line = static_cast<uint32_t>(num_c * m_width);
 	else if (m_dpx_ie_ptr->BitSize == 16)
-		idw_per_line = static_cast<uint32_t>(ceil(num_c * m_width / 2.0));
+		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width / 2.0));
 	else if (m_dpx_ie_ptr->Packing == 0 || m_dpx_ie_ptr->BitSize == 8)
-		idw_per_line = static_cast<uint32_t>(ceil(num_c * m_width * m_dpx_ie_ptr->BitSize / 8.0 / 4.0));
+		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width * m_dpx_ie_ptr->BitSize / 8.0 / 4.0));
 	else
 	{
 		if (m_dpx_ie_ptr->BitSize == 10)   // 3 datums per IDW
-			idw_per_line = static_cast<uint32_t>(ceil(num_c * m_width / 3.0));
+			idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width / 3.0));
 		else  // 12 bits, 2 datums per IDW
-			idw_per_line = static_cast<uint32_t>(ceil(num_c * m_width / 2.0));
+			idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width / 2.0));
 	}
 	if(include_padding)
 		idw_per_line += m_dpx_ie_ptr->EndOfLinePadding / 4;

@@ -1,38 +1,70 @@
-CC = gcc
+#CC = gcc
 GCCVER =
-#CC = g++
+CC = g++
 DEFINES =
 #JFLAGS = -std=c99 -g -Wall
-JFLAGS = -std=c99 -D_GNU_SOURCE -O3 -Wall
+JFLAGS = -D_GNU_SOURCE -O3 -Wall
 
 # =================================================================================
 
-conv_format_DEFS = \
-	cmd_parse.h \
-	dpx.h \
-	hdr_dpx.h \
+convert_descriptor_DEFS = \
+	datum.h \
 	fifo.h \
-	logging.h \
-	psnr.h \
-	utl.h \
-	vdo.h
+	file_map.h \
+	hdr_dpx.h \
+	hdr_dpx_error.h
 
-conv_format_SRCS = \
-	cmd_parse.c \
-	conv_main.c \
-	dpx.c \
-	hdr_dpx.c \
-	fifo.c \
-	logging.c \
-	print_header.c \
-	utl.c
+convert_descriptor_SRCS = \
+	convert_descriptor.cpp \
+	fifo.cpp \
+	file_map.cpp \
+	hdr_dpx_file.cpp \
+	hdr_dpx_image_element.cpp
 
-conv_format_OBJS = ${conv_format_SRCS:.c=.o}
+convert_descriptor_OBJS = ${convert_descriptor_SRCS:.c=.o}
+
+dump_dpx_DEFS = \
+	datum.h \
+	fifo.h \
+	file_map.h \
+	hdr_dpx.h \
+	hdr_dpx_error.h
+
+dump_dpx_SRCS = \
+	dump_dpx.cpp \
+	fifo.cpp \
+	file_map.cpp \
+	hdr_dpx_file.cpp \
+	hdr_dpx_image_element.cpp
+
+dump_dpx_OBJS = ${dump_dpx_SRCS:.c=.o}
+
+generate_color_test_pattern_DEFS = \
+	datum.h \
+	fifo.h \
+	file_map.h \
+	hdr_dpx.h \
+	hdr_dpx_error.h
+
+generate_color_test_pattern_SRCS = \
+	generate_color_test_pattern.cpp \
+	fifo.cpp \
+	file_map.cpp \
+	hdr_dpx_file.cpp \
+	hdr_dpx_image_element.cpp
+
+generate_color_test_pattern_OBJS = ${generate_color_test_pattern_SRCS:.c=.o}
 
 # ----------------------------------------------------------------
 
-conv_format: $(conv_format_OBJS)
-	$(CC) $(conv_format_OBJS) -lm -o conv_format
+convert_descriptor: $(convert_descriptor_OBJS)
+	$(CC) $(convert_descriptor_OBJS) -lm -o convert_descriptor
+
+dump_dpx: $(dump_dpx_OBJS)
+	$(CC) $(dump_dpx_OBJS) -lm -o dump_dpx
+
+generate_color_test_pattern: $(generate_color_test_pattern_OBJS)
+	$(CC) $(generate_color_test_pattern_OBJS) -lm -o generate_color_test_pattern
 
 # ----------------------------------------------------------------
 .c.o:
@@ -41,12 +73,9 @@ conv_format: $(conv_format_OBJS)
 .c.ln:
 	lint -c $*.c 
 
-% : %.c vdo.h utl_brcm.c utl.h dpx.h
-	gcc -O -o $@ $@.c utl_brcm.c dpx.c -lm -W -Wall -std=c99
-
-all: conv_format
+all: convert_descriptor dump_dpx generate_color_test_pattern
 
 clean:
 	rm -f *.o
-	rm -f conv_format
+	rm -f convert_descriptor dump_dpx generate_color_test_pattern
 
