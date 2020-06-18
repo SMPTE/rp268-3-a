@@ -39,21 +39,21 @@ dump_dpx_SRCS = \
 
 dump_dpx_OBJS = ${dump_dpx_SRCS:.c=.o}
 
-generate_color_test_pattern_DEFS = \
+generate_color_test_DEFS = \
 	datum.h \
 	fifo.h \
 	file_map.h \
 	hdr_dpx.h \
 	hdr_dpx_error.h
 
-generate_color_test_pattern_SRCS = \
-	generate_color_test_pattern.cpp \
+generate_color_test_SRCS = \
+	generate_color_test.cpp \
 	fifo.cpp \
 	file_map.cpp \
 	hdr_dpx_file.cpp \
 	hdr_dpx_image_element.cpp
 
-generate_color_test_pattern_OBJS = ${generate_color_test_pattern_SRCS:.c=.o}
+generate_color_test_OBJS = ${generate_color_test_SRCS:.c=.o}
 
 # ----------------------------------------------------------------
 
@@ -63,8 +63,8 @@ convert_descriptor: $(convert_descriptor_OBJS)
 dump_dpx: $(dump_dpx_OBJS)
 	$(CC) $(dump_dpx_OBJS) -lm -o dump_dpx
 
-generate_color_test_pattern: $(generate_color_test_pattern_OBJS)
-	$(CC) $(generate_color_test_pattern_OBJS) -lm -o generate_color_test_pattern
+generate_color_test: $(generate_color_test_OBJS)
+	$(CC) $(generate_color_test_OBJS) -lm -o generate_color_test
 
 # ----------------------------------------------------------------
 .c.o:
@@ -73,9 +73,9 @@ generate_color_test_pattern: $(generate_color_test_pattern_OBJS)
 .c.ln:
 	lint -c $*.c 
 
-all: convert_descriptor dump_dpx generate_color_test_pattern
+all: convert_descriptor dump_dpx generate_color_test
 
 clean:
 	rm -f *.o
-	rm -f convert_descriptor dump_dpx generate_color_test_pattern
+	rm -f convert_descriptor dump_dpx generate_color_test
 
