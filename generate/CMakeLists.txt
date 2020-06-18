@@ -1,21 +1,20 @@
 # CMakeLists.txt for color test pattern generator
-project(generate_color_test_pattern)
 
 cmake_minimum_required(VERSION 3.16)
 
+project(generate_color_test_pattern)
 
 # The parent directory is the root of this software project
-set(ROOT ..)
+set(ROOT ${CMAKE_SOURCE_DIR}/..)
 
 set(CMAKE_BUILD_TYPE DEBUG)
 
 # This project requires C++11
-IF(WIN32)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
-ELSE(WIN32)
-add_compile_options(-D_GNU_SOURCE -Wall -std=c11)
-ENDIF(WIN32)
+
+add_compile_options(-D_GNU_SOURCE -Wall)
+#add_compile_options(-Wall)
 
 include_directories(${ROOT})
 
@@ -23,23 +22,20 @@ include_directories(${ROOT})
 file(GLOB headers ${ROOT}/*.h)
 file(GLOB sources ${ROOT}/*.cpp)
 
-# Exclude source files that are not part of the build
-list(REMOVE_ITEM sources ${CMAKE_SOURCE_DIR}/${ROOT}/convert_descriptor.cpp)
-list(REMOVE_ITEM sources ${CMAKE_SOURCE_DIR}/${ROOT}/dump_dpx.cpp)
-list(REMOVE_ITEM sources ${CMAKE_SOURCE_DIR}/${ROOT}/hdr_dpx_error.cpp)
+# Exclude source files that are not included in this build
+list(REMOVE_ITEM sources ${ROOT}/convert_descriptor.cpp)
+list(REMOVE_ITEM sources ${ROOT}/dump_dpx.cpp)
+list(REMOVE_ITEM sources ${ROOT}/hdr_dpx_error.cpp)
 
 # Create folders for the source and header files
 source_group("Headers" FILES ${headers})
 source_group("Sources" FILES ${sources})
 
-# Define the source files for building the color test patter generator
+# Define the source files for building the color test pattern generator
 add_executable(generate_color_test_pattern ${sources})
 
-# This project requires C++11
-set_property(TARGET generate_color_test_pattern PROPERTY CXX_STANDARD 11)
-
-IF(NOT WIN32)
 # Link in the standard math library
+IF(NOT WIN32)
 target_link_libraries(generate_color_test_pattern m)
 ENDIF(NOT WIN32)
 

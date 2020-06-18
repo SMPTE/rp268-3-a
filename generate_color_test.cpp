@@ -58,7 +58,7 @@ int wstrlen(_TCHAR * wstr)
     return l_idx;
 }
 
-  
+
 // Allocate char string and copy TCHAR->char->string
 char * wstrdup(_TCHAR * wSrc)
 {
@@ -74,9 +74,9 @@ char * wstrdup(_TCHAR * wSrc)
     }
     return l_nstr;
 }
- 
-  
- 
+
+
+
 // allocate argn structure parallel to argv
 // argn must be released
 char ** allocate_argn (int argc, _TCHAR* argv[])
@@ -88,7 +88,7 @@ char ** allocate_argn (int argc, _TCHAR* argv[])
     }
     return l_argn;
 }
- 
+
 // release argn and its content
 void release_argn(int argc, char ** nargv)
 {
@@ -812,8 +812,8 @@ int main(int argc, char *argv[])
 	ColorBarGenerator cbgen;
 	CBColor colormap;
 	int32_t alphaval;
-	Dpx::HdrDpxDatumMappingDirection datum_mapping_direction = Dpx::eDatumMappingDirectionL2R; 
-	Dpx::HdrDpxByteOrder byte_order = Dpx::eNativeByteOrder;  
+	Dpx::HdrDpxDatumMappingDirection datum_mapping_direction = Dpx::eDatumMappingDirectionL2R;
+	Dpx::HdrDpxByteOrder byte_order = Dpx::eNativeByteOrder;
 	Dpx::HdrDpxPacking packing = Dpx::ePackingPacked;   // 0 => packed, 1 => method A, 2 => Method B
 	Dpx::HdrDpxEncoding rle_encoding = Dpx::eEncodingNoEncoding;
 
