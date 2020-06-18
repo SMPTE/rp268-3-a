@@ -935,7 +935,7 @@ int main(int argc, char *argv[])
 		else
 		{
 			std::cerr << "Invalid tf type\n";
-			return;
+			return 0;
 		}
 	}
 
