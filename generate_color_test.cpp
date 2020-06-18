@@ -43,6 +43,7 @@
 #include <iomanip>
 #include <vector>
 #include <string>
+#include <cstring>
 
 using namespace std;
 
@@ -935,7 +936,7 @@ int main(int argc, char *argv[])
 		else
 		{
 			std::cerr << "Invalid tf type\n";
-			return;
+			return 1;
 		}
 	}
 
