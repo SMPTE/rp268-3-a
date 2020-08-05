@@ -48,7 +48,8 @@
 
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 
-#define RLE_MARGIN   0.1     // 0.1 = 10% margin means we assume that in the worst case an RLE image element might be 10% bigger than uncompressed
+#define RLE_MARGIN   (1.0/127)   // = ~1% margin means we assume that in the worst case an RLE image element might be slightly bigger than uncompressed 
+                                  //         (1-component 8-bit IE where RLE flag always indicates no redundancy should be worst case if we require "same" runs to be at least 3 long for 1-component IE case)
 
 #ifndef DPX_H
 #define DPX_ERROR_UNRECOGNIZED_CHROMA  -1
@@ -1114,6 +1115,8 @@ namespace Dpx {
 		uint32_t GetHeight(void) const;
 		uint32_t GetRowSizeInBytes(bool include_padding = false) const;
 		uint32_t GetRowSizeInDatums() const;
+		uint32_t GetImageDataSizeInBytes() const;
+		void ComputeWidthAndHeight(void);
 
 		uint32_t GetHeader(HdrDpxIEFieldsU32 field) const;
 		float GetHeader(HdrDpxIEFieldsR32 field) const;
@@ -1159,7 +1162,7 @@ namespace Dpx {
 		std::fstream *m_filestream_ptr;
 		FileMap *m_file_map_ptr;
 
-		uint32_t GetOffsetForRow(uint32_t row);
+		uint32_t GetOffsetForRow(uint32_t row) const;
 		void ReadRow(uint32_t row);
 		void WriteRow(uint32_t row);
 		uint32_t BytesUsed(void);

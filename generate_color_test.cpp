@@ -348,7 +348,7 @@ public:
 					AddColor(CYAN_75, 64, 572, 572);
 					AddColor(GREEN_75, 64, 572, 64);
 					AddColor(MAGENTA_75, 572, 64, 572);
-					AddColor(RED_75, 572, 64, 572);
+					AddColor(RED_75, 572, 64, 64);
 					AddColor(BLUE_75, 64, 64, 572);
 					AddColor(GRAY_40, 414, 414, 414);
 					AddColor(CYAN_100, 64, 940, 940);
@@ -407,7 +407,7 @@ public:
 					AddColor(BLACK_P4P, 99, 99, 99);
 					m_isvalid = true;
 				}
-				else if (bpc == 12 && tftype == TF_SDR)
+				else if (bpc == 12 && tftype == TF_HLG)
 				{
 					AddColor(WHITE_75, 2884, 2884, 2884);
 					AddColor(YELLOW_75, 2884, 2884, 256);
@@ -458,11 +458,11 @@ public:
 	}
 	bool m_isvalid = false;
 private:
-	void AddColor(bar_colors_e c, int32_t y, int32_t cb, int32_t cr)
+	void AddColor(bar_colors_e c, int32_t c1, int32_t c2, int32_t c3)
 	{
-		m_colors[c][0] = cb;
-		m_colors[c][1] = y;
-		m_colors[c][2] = cr;
+		m_colors[c][0] = c1;
+		m_colors[c][1] = c2;
+		m_colors[c][2] = c3;
 	}
 	int32_t m_colors[COLOR_MAX][3];
 	comp_type_e m_ct;
@@ -753,20 +753,20 @@ private:
 				ret.push_back(Dpx::DATUM_Y2);
 				subs = subs.substr(1);
 			}
-			if (subs.substr(0, 1) == "C")
-			{
-				ret.push_back(Dpx::DATUM_C);
-				subs = subs.substr(1);
-			}
 			if (subs.substr(0, 2) == "Cb")
 			{
 				ret.push_back(Dpx::DATUM_CB);
 				subs = subs.substr(2);
 			}
-			if (subs.substr(0, 2) == "Cr")
+			else if (subs.substr(0, 2) == "Cr")
 			{
 				ret.push_back(Dpx::DATUM_CR);
 				subs = subs.substr(2);
+			}
+			else if (subs.substr(0, 1) == "C")
+			{
+				ret.push_back(Dpx::DATUM_C);
+				subs = subs.substr(1);
 			}
 		}
 		return ret;
@@ -810,8 +810,6 @@ int main(int argc, char *argv[])
 	std::string corder = "CbYCr";
 	bool planar = false;
 	int chroma = 444;
-	ColorBarGenerator cbgen;
-	CBColor colormap;
 	int32_t alphaval;
 	Dpx::HdrDpxDatumMappingDirection datum_mapping_direction = Dpx::eDatumMappingDirectionL2R; 
 	Dpx::HdrDpxByteOrder byte_order = Dpx::eNativeByteOrder;  
@@ -823,13 +821,22 @@ int main(int argc, char *argv[])
 		std::cerr << "Expected even number of command line parameters\n";
 		return 1;
 	}
+
 	// Note that command-line argument error checking is absent
 	for (int i = 1; i < argc; ++i)
 	{
 		if (!strcmp(argv[i], "-o"))
 			fname = argv[++i];
 		else if (!strcmp(argv[i], "-tf"))
-			tftype = static_cast<tf_type_e>(atoi(argv[++i]));
+		{
+			if (!strcmp(argv[i + 1], "BT709"))
+				tftype = TF_SDR;
+			else if (!strcmp(argv[i + 1], "HLG"))
+				tftype = TF_HLG;
+			else
+				tftype = TF_PQ;
+			i++;
+		}
 		else if (!strcmp(argv[i], "-corder"))
 			corder = argv[++i];
 		else if (!strcmp(argv[i], "-usefr"))
@@ -837,7 +844,7 @@ int main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-bpc"))
 			bpc = static_cast<uint8_t>(atoi(argv[++i]));
 		else if (!strcmp(argv[i], "-planar"))
-			planar = atoi(argv[++i]) == 1;
+			planar = atoi(argv[++i]) > 0;
 		else if (!strcmp(argv[i], "-chroma"))
 			chroma = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-w"))
@@ -865,6 +872,19 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	cout << "Output file name: " << fname << endl;
+	cout << "Transfer function: " << static_cast<int>(tftype) << endl;
+	cout << "Component order: " << corder << endl;
+	cout << "Use full range?  " << usefullrange << endl;
+	cout << "Bit depth:  " << static_cast<int>(bpc) << endl;
+	cout << "Use planar format?  " << planar << endl;
+	cout << "Picture width:  " << width << endl;
+	cout << "Picture hieght:  " << height << endl;
+	cout << "Datum mapping direction:  " << static_cast<int>(datum_mapping_direction) << endl;
+	cout << "Byte order:  " << static_cast<int>(byte_order) << endl;
+	cout << "Packing:  " << static_cast<int>(packing) << endl;
+	cout << "RLE encoding:  " << static_cast<int>(rle_encoding) << endl;
+
 	alphaval = (1 << bpc) - 1;   // Always use max alpha
 
 	if (chroma != 444 && chroma != 422 && chroma != 420)
@@ -874,16 +894,17 @@ int main(int argc, char *argv[])
 	}
 	if (corder.find("R") != std::string::npos)
 		ctype = CT_RGB;
+	else
+		ctype = CT_YCBCR;
 
-	cbgen = ColorBarGenerator(width, height);
+	ColorBarGenerator cbgen(width, height);
 
-	colormap = CBColor(bpc, ctype, tftype, usefullrange);
+	CBColor colormap(bpc, ctype, tftype, usefullrange);
 	if (!colormap.m_isvalid)
 	{
 		std::cerr << "Invalid color test configuration\n";
 		return 1;
 	}
-
 	IEMapper iemap(corder, chroma, planar);
 
 	uint8_t ie_idx = 0;
@@ -940,6 +961,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+
 	// Set header values as desired (defaults assumed based on image element structure)
 	dpxf.SetHeader(Dpx::eCopyright, "(C) 20XX Not a real copyright");  // Key is a string, value matches data type
 	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
@@ -947,6 +969,7 @@ int main(int argc, char *argv[])
 	{
 		dump_error_log("Validation errors:\n", dpxf);
 	}
+
 
 	// Start writing file
 	dpxf.OpenForWriting(fname);
@@ -981,6 +1004,13 @@ int main(int argc, char *argv[])
 						datum_row[datum_idx++] = cbcomps[1];
 					else if (dl == Dpx::DATUM_B || dl == Dpx::DATUM_CR)
 						datum_row[datum_idx++] = cbcomps[2];
+					else if (dl == Dpx::DATUM_C)
+					{
+						if (row & 1)   // odd row (CR)
+							datum_row[datum_idx++] = cbcomps[2];
+						else           // Even row (CB)
+							datum_row[datum_idx++] = cbcomps[1];
+					}
 					else if (dl == Dpx::DATUM_Y2)
 					{
 						color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
@@ -990,7 +1020,10 @@ int main(int argc, char *argv[])
 				}
 			}
 			if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
+			{
 				printf("Unexpected datum index\n");
+				getchar();
+			}
 			ie->App2DpxPixels(row, datum_row.data());
 		}
 	}

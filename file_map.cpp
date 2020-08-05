@@ -78,7 +78,7 @@ bool FileMap::CheckCollisions()
 
 void FileMap::EditRegionEnd(int tag, uint32_t region_end)
 {
-	for (int i = 0; i < m_r.size() - 1; ++i)
+	for (int i = 0; i < m_r.size(); ++i)
 	{
 		if (m_r[i].tag == tag)
 			m_r[i].end = region_end;
@@ -117,7 +117,7 @@ uint8_t FileMap::GetActiveRLEIndex()
 std::vector<uint32_t> FileMap::GetRLEIEDataOffsets()
 {
 	std::vector<uint32_t> offsets;
-	offsets.resize(8);
+	offsets.resize(8, UINT32_MAX);
 	for (auto r : m_rle_ie)
 		offsets[r.ie_index] = r.data_offset;
 	return offsets;
@@ -125,6 +125,7 @@ std::vector<uint32_t> FileMap::GetRLEIEDataOffsets()
 
 void FileMap::Reset()
 {
+	m_rle_ie_idx = 0;
 	m_r.clear();
 	m_rle_ie.clear();
 }

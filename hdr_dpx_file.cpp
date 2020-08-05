@@ -285,17 +285,18 @@ void HdrDpxFile::ComputeOffsets()
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
+			m_IE[ie_idx].ComputeWidthAndHeight();
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 			if (data_offset != UINT32_MAX)
 			{
 				if (m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)   // RLE can theoretically use more bits than compressed
 				{
-					uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].BytesUsed());
+					uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].GetImageDataSizeInBytes());
 					m_filemap.AddRegion(data_offset, data_offset + est_size, ie_idx);
 					m_filemap.AddRLEIE(ie_idx, data_offset, est_size);
 				}
 				else
-					m_filemap.AddRegion(data_offset, data_offset + m_IE[ie_idx].BytesUsed(), ie_idx);
+					m_filemap.AddRegion(data_offset, data_offset + m_IE[ie_idx].GetImageDataSizeInBytes(), ie_idx);
 			}
 		}
 	}
@@ -308,11 +309,12 @@ void HdrDpxFile::ComputeOffsets()
 		{
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) != eEncodingRLE)
-				m_IE[ie_idx].SetHeader(eOffsetToData, m_filemap.FindEmptySpace(m_IE[ie_idx].BytesUsed(), ie_idx));
+				m_IE[ie_idx].SetHeader(eOffsetToData, m_filemap.FindEmptySpace(m_IE[ie_idx].GetImageDataSizeInBytes(), ie_idx));
 		}
 	}
 
 	// Lastly add first variable-size IE
+	int first_ie = 1;
 	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
@@ -320,11 +322,15 @@ void HdrDpxFile::ComputeOffsets()
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)
 			{
-				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].BytesUsed());
-				data_offset = m_filemap.FindEmptySpace(est_size, ie_idx);
-				m_IE[ie_idx].SetHeader(eOffsetToData, data_offset);
+				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].GetImageDataSizeInBytes());
+				est_size = ((est_size + 3) >> 2) << 2;  // round to dword boundary
+				if (first_ie)
+				{
+					data_offset = m_filemap.FindEmptySpace(est_size, ie_idx);
+					m_IE[ie_idx].SetHeader(eOffsetToData, data_offset);
+					first_ie = 0;
+				}
 				m_filemap.AddRLEIE(ie_idx, data_offset, est_size);
-				break;
 			}
 		}
 	}
@@ -367,7 +373,6 @@ void HdrDpxFile::FillCoreFields()
 	}
 	m_dpx_header.FileHeader.GenericSize = 1684;
 	m_dpx_header.FileHeader.IndustrySize = 384;
-	ComputeOffsets();
 
 	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
@@ -470,6 +475,7 @@ void HdrDpxFile::FillCoreFields()
 			m_IE[ie_idx].SetHeader(eEndOfImagePadding, 0);
 		}
 	}
+	ComputeOffsets();
 }
 
 

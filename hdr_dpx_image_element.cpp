@@ -432,7 +432,7 @@ void HdrDpxImageElement::Deinitialize()
 }
 
 
-void HdrDpxImageElement::OpenForReading(bool bswap)
+void HdrDpxImageElement::ComputeWidthAndHeight()
 {
 	m_is_h_subsampled = m_is_v_subsampled = false;
 	if (m_dpx_ie_ptr->Descriptor == eDescCb || m_dpx_ie_ptr->Descriptor == eDescCr)
@@ -443,7 +443,11 @@ void HdrDpxImageElement::OpenForReading(bool bswap)
 		m_is_h_subsampled = true;
 	m_width = m_dpx_hdr_ptr->ImageHeader.PixelsPerLine / (m_is_h_subsampled ? 2 : 1);
 	m_height = m_dpx_hdr_ptr->ImageHeader.LinesPerElement / (m_is_v_subsampled ? 2 : 1);
+}
 
+void HdrDpxImageElement::OpenForReading(bool bswap)
+{
+	ComputeWidthAndHeight();
 	m_byte_swap = bswap;
 	m_direction_r2l = (m_dpx_hdr_ptr->FileHeader.DatumMappingDirection == 0);
 	m_is_open_for_read = true;
@@ -463,15 +467,7 @@ void HdrDpxImageElement::OpenForWriting(bool bswap)
 		LOG_ERROR(eFileWriteError, eFatal, "Cannot write image element " + std::to_string(m_ie_index + 1) + " without bit depth field");
 		return;
 	}
-	m_is_h_subsampled = m_is_v_subsampled = false;
-	if (m_dpx_ie_ptr->Descriptor == eDescCb || m_dpx_ie_ptr->Descriptor == eDescCr)
-		m_is_h_subsampled = m_is_v_subsampled = true;
-	else if (m_dpx_ie_ptr->Descriptor == eDescCbCr || m_dpx_ie_ptr->Descriptor == eDescCbYCrY ||
-		m_dpx_ie_ptr->Descriptor == eDescCbYACrYA || m_dpx_ie_ptr->Descriptor == eDescCYY ||
-		m_dpx_ie_ptr->Descriptor == eDescCYAYA)
-		m_is_h_subsampled = true;
-	m_width = m_dpx_hdr_ptr->ImageHeader.PixelsPerLine / (m_is_h_subsampled ? 2 : 1);
-	m_height = m_dpx_hdr_ptr->ImageHeader.LinesPerElement / (m_is_v_subsampled ? 2 : 1);
+	ComputeWidthAndHeight();
 
 	m_byte_swap = bswap;
 	m_direction_r2l = (m_dpx_hdr_ptr->FileHeader.DatumMappingDirection == 0);
@@ -531,7 +527,7 @@ uint32_t HdrDpxImageElement::GetRowSizeInDatums() const
 	return GetWidth() * GetNumberOfComponents();
 }
 
-uint32_t HdrDpxImageElement::GetOffsetForRow(uint32_t row)
+uint32_t HdrDpxImageElement::GetOffsetForRow(uint32_t row) const
 {
 
 	return m_dpx_ie_ptr->DataOffset + GetRowSizeInBytes(true) * row;
@@ -1082,7 +1078,19 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	{
 		if (row == 0)
 		{
-			m_filestream_ptr->seekp(m_dpx_ie_ptr->DataOffset);
+			uint32_t data_offset = m_dpx_ie_ptr->DataOffset;
+			if (data_offset == UINT32_MAX)
+			{
+				std::vector<uint32_t> rle_ie_offsets = m_file_map_ptr->GetRLEIEDataOffsets();
+				data_offset = rle_ie_offsets[m_ie_index];
+				if (data_offset == UINT32_MAX)
+				{
+					LOG_ERROR(eBadParameter, eFatal, "Could not find valid image data offset");
+					return;
+				}
+				m_dpx_ie_ptr->DataOffset = data_offset;
+			}
+			m_filestream_ptr->seekp(data_offset);
 		}
 		else if (row != m_previous_row + 1)
 		{
@@ -1101,8 +1109,6 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	xpos = 0;
 
 	// write
-	if (row == 720)
-		row = 720;			//// DEBUG
 	row_wr_idx = 0;
 	m_row_rd_idx = 0;
 	xpos = 0;
@@ -1121,7 +1127,10 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 				{
 					rle_pixel[component] = m_int_row[xpos * num_components + component];
 				}
-				run_type = IsNextSame(xpos, rle_pixel);
+				if (num_components > 1)
+					run_type = IsNextSame(xpos, rle_pixel);
+				else  // For 1-component IEs, it doesn't make sense to declare a run unleses it lasts more than 2 pixels
+					run_type = IsNextSame(xpos, rle_pixel) && IsNextSame(xpos + 1, rle_pixel); 
 				if (run_type)  //  Same run
 				{
 					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
@@ -1132,7 +1141,7 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 				}
 				else   // Different run
 				{
-					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
+					for (run_length = 1; run_length < m_width - xpos - 1 && run_length < max_run - 1; ++run_length)
 					{
 						for (component = 0; component < num_components; ++component)
 						{
@@ -1435,9 +1444,14 @@ uint32_t HdrDpxImageElement::GetHeight(void) const
 uint32_t HdrDpxImageElement::BytesUsed(void)
 {
 	if (m_dpx_ie_ptr->Encoding == 1)
-		return(((static_cast<uint32_t>(m_filestream_ptr->tellp()) - m_dpx_ie_ptr->DataOffset + 3) >> 2) << 2);
+		return (((static_cast<uint32_t>(m_filestream_ptr->tellp()) - m_dpx_ie_ptr->DataOffset + 3) >> 2) << 2) + m_dpx_ie_ptr->EndOfImagePadding;
 	else
-		return(GetOffsetForRow(m_height));
+		return(GetRowSizeInBytes(true) * m_height + m_dpx_ie_ptr->EndOfImagePadding);
+}
+
+uint32_t HdrDpxImageElement::GetImageDataSizeInBytes(void) const
+{
+	return(GetRowSizeInBytes(true) * m_height + m_dpx_ie_ptr->EndOfImagePadding);
 }
 
 void HdrDpxImageElement::CopyHeaderFrom(HdrDpxImageElement *ie)
