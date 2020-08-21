@@ -59,6 +59,7 @@
 
 using namespace Dpx;
 
+#if 0
 static int g_HdrDpxStringLengths[] =
 {
 	FILE_NAME_SIZE,
@@ -78,6 +79,7 @@ static int g_HdrDpxStringLengths[] =
 	32,
 	100
 };
+#endif
 
 HdrDpxFile::HdrDpxFile(std::string filename)
 {
@@ -112,7 +114,7 @@ HdrDpxFile::~HdrDpxFile()
 void HdrDpxFile::OpenForReading(std::string filename)
 {
 	ErrorObject err;
-	
+
 	m_file_stream.open(filename, std::ios::binary | std::ios::in);
 
 	m_err.Clear();
@@ -493,7 +495,7 @@ void HdrDpxFile::OpenForWriting(std::string filename)
 		byte_swap = m_machine_is_msbf ? false : true;
 
 	m_file_name = filename;
-	
+
 	if (!m_file_stream)
 	{
 		LOG_ERROR(eFileOpenError, eFatal, "Unable to open file " + filename + " for output");
@@ -597,9 +599,9 @@ std::string HdrDpxFile::DumpHeader() const
 	header = header + "\n\n//////////////////////////////////////////////////////////////////\n" +
 		"// File information header for " + m_file_name + "\n" +
 		"//////////////////////////////////////////////////////////////////\n";
-	
+
 	PRINT_RO_FIELD_U32_HEX(std::string("Magic"), static_cast<unsigned int>(m_dpx_header.FileHeader.Magic));
-	
+
 	PRINT_FIELD_U32(std::string("Image_Offset"), m_dpx_header.FileHeader.ImageOffset);
 	PRINT_FIELD_ASCII(std::string("// Version"), m_dpx_header.FileHeader.Version, 8);
 	PRINT_RO_FIELD_U32(std::string("File_Size"), m_dpx_header.FileHeader.FileSize);
@@ -735,9 +737,9 @@ bool HdrDpxFile::Validate()
 	return m_err.GetWorstSeverity() != eInformational;
 }
 
-bool HdrDpxFile::CopyStringN(char *dest, std::string src, int max_length)
+bool HdrDpxFile::CopyStringN(char *dest, std::string src, size_t max_length)
 {
-	for (int idx = 0; idx < max_length; ++idx)
+	for (size_t idx = 0; idx < max_length; ++idx)
 	{
 		if (idx >= src.length())
 			*(dest++) = '\0';
@@ -921,7 +923,7 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 		return CopyToStringN(m_dpx_sbmdata.SbmFormatDescriptor, 128);
 	case eSBMetadata:
 		if (!m_dpx_sbmdata.SbmData.size())
-			return "";	
+			return "";
 		return std::string((char *)m_dpx_sbmdata.SbmData.data());
 	}
 	return "";

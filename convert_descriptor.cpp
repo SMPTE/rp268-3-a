@@ -139,7 +139,7 @@ bool compare_datum_desc(Dpx::HdrDpxDescriptor destdesc, Dpx::HdrDpxDescriptor sr
 	std::vector<Dpx::DatumLabel> dl_src = Dpx::DescriptorToDatumList(srcdesc);
 	std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(destdesc);
 
-	for (int i = 0; i < dl_dest.size(); ++i)
+	for (size_t i = 0; i < dl_dest.size(); ++i)
 		if (dl_dest[datum] == dl_src[i])
 		{
 			foundpos = i;
@@ -156,11 +156,13 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 
 	matching_ie.resize(dl_dest.size());
 	matching_component.resize(dl_dest.size());
-	for (int i = 0; i < dl_dest.size(); ++i)
+
+	for (size_t i = 0; i < dl_dest.size(); ++i)
 		matching_ie[i] = -1;					// -1 means not found
-	for (int i = 0; i < dl_dest.size(); ++i)
+
+	for (size_t i = 0; i < dl_dest.size(); ++i)
 	{
-		for (int j = 0; j < srclist.size(); ++j)
+		for (size_t j = 0; j < srclist.size(); ++j)
 		{
 			if (compare_datum_desc(dest, srclist[j], i, foundpos))
 			{
@@ -207,7 +209,7 @@ int main(int argc, char *argv[])
 
 	// Create and open f_in for reading:
 	Dpx::HdrDpxFile  f_in(filename_in);
-	
+
 	Dpx::HdrDpxFile  f_out;
 	Dpx::HdrDpxImageElement *ie_in, *ie_out;
 	std::string userid, sbmdesc;
@@ -253,7 +255,7 @@ int main(int argc, char *argv[])
 	std::vector<Dpx::HdrDpxDescriptor> dest_ie_desc_list;
 	if (planar)
 	{
-		for (int idx = 0; idx < order.length(); ++idx)
+		for (size_t idx = 0; idx < order.length(); ++idx)
 		{
 			if (order.substr(idx, 1) == "R")
 				dest_ie_desc_list.push_back(Dpx::eDescR);
@@ -309,7 +311,7 @@ int main(int argc, char *argv[])
 	// Because we wanted to support RLE, we loop over IEs then rows. If RLE is not a consideration, the loops can be switched
 	// Loop over destination IEs
 	for(uint8_t out_ie_idx = 0; out_ie_idx < dest_ie_desc_list.size(); ++out_ie_idx)
-	{ 
+	{
 		std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest_ie_desc_list[out_ie_idx]);
 		std::vector<int32_t> datum_row_out;
 		std::vector<int32_t> datum_row_in[8];

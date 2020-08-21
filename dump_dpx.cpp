@@ -57,7 +57,7 @@ int wstrlen(_TCHAR * wstr)
     return l_idx;
 }
 
-  
+
 // Allocate char string and copy TCHAR->char->string
 char * wstrdup(_TCHAR * wSrc)
 {
@@ -73,9 +73,9 @@ char * wstrdup(_TCHAR * wSrc)
     }
     return l_nstr;
 }
- 
-  
- 
+
+
+
 // allocate argn structure parallel to argv
 // argn must be released
 char ** allocate_argn (int argc, _TCHAR* argv[])
@@ -87,7 +87,7 @@ char ** allocate_argn (int argc, _TCHAR* argv[])
     }
     return l_argn;
 }
- 
+
 // release argn and its content
 void release_argn(int argc, char ** nargv)
 {
@@ -126,7 +126,7 @@ static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 inline string tohex(uint8_t v)
 {
 	stringstream ss;
-	
+
 	ss << setfill('0');
 
 	ss << hex << setw(2) << v;
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
 
 		std::cout << "User identification: '" << userid << "'\n";
 		std::cout << "User data (hex bytes):\n";
-		for (int i = 0; i < userdata.size(); ++i)
+		for (size_t i = 0; i < userdata.size(); ++i)
 		{
 			std::cout << tohex(userdata[i]) << " ";
 			if ((i & 0xf) == 0xf)
@@ -199,7 +199,7 @@ int main(int argc, char *argv[])
 		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
 		{
 			std::cout << "Hex bytes:\n";
-			for (int i = 0; i < sbmdata.size(); ++i)
+			for (size_t i = 0; i < sbmdata.size(); ++i)
 			{
 				std::cout << tohex(sbmdata[i]) << " ";
 				if ((i & 0xf) == 0xf)
@@ -218,7 +218,7 @@ int main(int argc, char *argv[])
 	}
 
 	for(auto src_ie_idx : f.GetIEIndexList())
-	{ 
+	{
 		ie = f.GetImageElement(src_ie_idx);
 		std::cout << "Component types for image element " << src_ie_idx << ": ";
 		for (auto c : ie->GetDatumLabels())
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
 				rowdata.resize(ie->GetRowSizeInDatums());
 				ie->Dpx2AppPixels(row, static_cast<float *>(rowdata.data()));
 				while(datum_idx < ie->GetWidth() * ie->GetNumberOfComponents())
-				{ 
+				{
 					std::cout << "(";
 					for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 					{

@@ -103,7 +103,7 @@ namespace Dpx {
 			if (severity > m_worst_severity)
 				m_worst_severity = severity;
 		}
-		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
+		void GetError(size_t index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
 		{
 			if (index >= m_code.size())
 			{

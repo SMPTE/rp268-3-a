@@ -1,11 +1,11 @@
-# CMakeLists.txt for color test pattern generator
+# CMakeLists.txt for convert descriptor tool
 
 cmake_minimum_required(VERSION 3.17)
 
 set(CMAKE_C_COMPILER "gcc-10")
 set(CMAKE_CXX_COMPILER "g++-10")
 
-project(generate_color_test_pattern)
+project(convert_descriptor)
 
 # The location of the top-level directory for this project
 set(ROOT ${CMAKE_SOURCE_DIR}/..)
@@ -17,16 +17,15 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED on)
 
 add_compile_options(-D_GNU_SOURCE -Wall)
-#add_compile_options(-Wall)
 
 include_directories(${ROOT})
 
-# List the files that comprise the project
+# Find the files that comprise the project
 file(GLOB headers ${ROOT}/*.h)
 file(GLOB sources ${ROOT}/*.cpp)
 
 # Exclude source files that are not included in this build
-list(REMOVE_ITEM sources ${ROOT}/convert_descriptor.cpp)
+list(REMOVE_ITEM sources ${ROOT}/generate_color_test.cpp)
 list(REMOVE_ITEM sources ${ROOT}/dump_dpx.cpp)
 list(REMOVE_ITEM sources ${ROOT}/hdr_dpx_error.cpp)
 
@@ -34,12 +33,12 @@ list(REMOVE_ITEM sources ${ROOT}/hdr_dpx_error.cpp)
 source_group("Headers" FILES ${headers})
 source_group("Sources" FILES ${sources})
 
-# Define the source files for building the color test pattern generator
-add_executable(generate_color_test_pattern ${sources})
+# Define the source files for building the converter
+add_executable(convert_descriptor ${sources})
 
 IF(NOT MSVC)
   # Link in the standard math library
-  target_link_libraries(generate_color_test_pattern m)
+  target_link_libraries(convert_descriptor m)
 ENDIF(NOT MSVC)
 
 # Add target for removing all build products and the files created by running CMake

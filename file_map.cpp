@@ -52,7 +52,7 @@ void FileMap::AddRegion(uint32_t region_start, uint32_t region_end, int tag)
 
 uint32_t FileMap::FindEmptySpace(uint32_t region_size, int tag)
 {
-	int i;
+	size_t i;
 	for (i = 0; i < m_r.size() - 1; ++i)
 	{
 		if (m_r[i + 1].start - m_r[i].end >= region_size)
@@ -67,8 +67,7 @@ uint32_t FileMap::FindEmptySpace(uint32_t region_size, int tag)
 
 bool FileMap::CheckCollisions()
 {
-	int i;
-	for (i = 0; i < m_r.size() - 1; ++i)
+	for (size_t i = 0; i < m_r.size() - 1; ++i)
 	{
 		if (m_r[i + 1].start < m_r[i].end)
 			return true;
@@ -78,7 +77,7 @@ bool FileMap::CheckCollisions()
 
 void FileMap::EditRegionEnd(int tag, uint32_t region_end)
 {
-	for (int i = 0; i < m_r.size(); ++i)
+	for (size_t i = 0; i < m_r.size(); ++i)
 	{
 		if (m_r[i].tag == tag)
 			m_r[i].end = region_end;

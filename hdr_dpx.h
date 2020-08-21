@@ -48,7 +48,7 @@
 
 #define MAX(a, b)  (((a) > (b)) ? (a) : (b))
 
-#define RLE_MARGIN   (1.0/127)   // = ~1% margin means we assume that in the worst case an RLE image element might be slightly bigger than uncompressed 
+#define RLE_MARGIN   (1.0/127)   // = ~1% margin means we assume that in the worst case an RLE image element might be slightly bigger than uncompressed
                                   //         (1-component 8-bit IE where RLE flag always indicates no redundancy should be worst case if we require "same" runs to be at least 3 long for 1-component IE case)
 
 #ifndef DPX_H
@@ -276,7 +276,7 @@ namespace Dpx {
 		eSourceFileName, // FILE_NAME_SIZE
 		eSourceTimeDate, // TIMEDATE_SIZE
 		eInputName, // INPUTNAME_SIZE
-		eInputSN, // INPUTSN_SIZE 
+		eInputSN, // INPUTSN_SIZE
 		eFilmMfgId, // 2
 		eFilmType, // 2
 		eOffsetPerfs, // 4
@@ -1068,9 +1068,9 @@ namespace Dpx {
 //    error_handler(error_code);
 //  // Set fields as desired, for example:
 //  hdr_dpx_copy_string_n(dpx_header.Copyright, "(C) 2019 XYZ Productions", COPYRIGHT_SIZE);
-//  
+//
 //  // Write the file
-//  error_code = hdr_dpx_write(fname, &dpx_imgdata, &dpx_header, &dpx_user_data, &dpx_sbmdata,  
+//  error_code = hdr_dpx_write(fname, &dpx_imgdata, &dpx_header, &dpx_user_data, &dpx_sbmdata,
 //  if(error_code)
 //    error_handler(error_code);
 //
@@ -1166,7 +1166,7 @@ namespace Dpx {
 		void ReadRow(uint32_t row);
 		void WriteRow(uint32_t row);
 		uint32_t BytesUsed(void);
-		
+
 		uint32_t m_width;
 		uint32_t m_height;
 		bool m_byte_swap;
@@ -1198,7 +1198,7 @@ namespace Dpx {
 	class HdrDpxFile
 	{
 	public:
-		HdrDpxFile(); 
+		HdrDpxFile();
 		HdrDpxFile(std::string filename);			// Shortcut to open a file for reading
 		~HdrDpxFile();
 		friend std::ostream& operator<<(std::ostream & os, const HdrDpxFile &dpxf)
@@ -1256,7 +1256,7 @@ namespace Dpx {
 	private:
 		//friend class HdrDpxImageElement;
 		HdrDpxImageElement m_IE[8];
-		bool CopyStringN(char *dest, std::string src, int field_length);
+		bool CopyStringN(char *dest, std::string src, size_t field_length);
 		std::string CopyToStringN(const char * src, int field_length) const;
 		void ByteSwapHeader(void);
 		void ByteSwapSbmHeader(void);

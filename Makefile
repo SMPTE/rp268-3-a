@@ -4,6 +4,8 @@ CC = g++
 DEFINES =
 #JFLAGS = -std=c99 -g -Wall
 JFLAGS = -D_GNU_SOURCE -O3 -Wall
+CFLAGS = -g D_GNU_SOURCE -Wall
+CPPFLAGS = -g -D_GNU_SOURCE -Wall -std=gnu++11 -Wc++11-extensions
 
 # =================================================================================
 
@@ -21,7 +23,7 @@ convert_descriptor_SRCS = \
 	hdr_dpx_file.cpp \
 	hdr_dpx_image_element.cpp
 
-convert_descriptor_OBJS = ${convert_descriptor_SRCS:.c=.o}
+convert_descriptor_OBJS = ${convert_descriptor_SRCS:.cpp=.o}
 
 dump_dpx_DEFS = \
 	datum.h \
@@ -37,7 +39,7 @@ dump_dpx_SRCS = \
 	hdr_dpx_file.cpp \
 	hdr_dpx_image_element.cpp
 
-dump_dpx_OBJS = ${dump_dpx_SRCS:.c=.o}
+dump_dpx_OBJS = ${dump_dpx_SRCS:.cpp=.o}
 
 generate_color_test_DEFS = \
 	datum.h \
@@ -55,6 +57,7 @@ generate_color_test_SRCS = \
 
 generate_color_test_OBJS = ${generate_color_test_SRCS:.c=.o}
 
+
 # ----------------------------------------------------------------
 
 convert_descriptor: $(convert_descriptor_OBJS)
@@ -67,11 +70,17 @@ generate_color_test: $(generate_color_test_OBJS)
 	$(CC) $(generate_color_test_OBJS) -lm -o generate_color_test
 
 # ----------------------------------------------------------------
-.c.o:
-	$(CC) $(JFLAGS) $(DEFINES) -c $*.c 
+# .c.o:
+# 	$(CC) $(JFLAGS) $(DEFINES) -c $*.c
+#
+# .c.ln:
+# 	lint -c $*.c
 
-.c.ln:
-	lint -c $*.c 
+%.o: %.c
+	$(CC) $(CFLAGS) $(INCPATH) -c $< -o $@
+
+%.o: %.cpp
+	$(CC) $(CPPFLAGS) $(INCPATH) -c $< -o $@
 
 all: convert_descriptor dump_dpx generate_color_test
 

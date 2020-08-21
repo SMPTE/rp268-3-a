@@ -390,6 +390,8 @@ std::string HdrDpxImageElement::DatumLabelToName(Dpx::DatumLabel dl) const
 		return "Unspec7";
 	case DATUM_UNSPEC8:
 		return "Unspec8";
+	case DATUM_SIZE:
+		return std::string();		//TODO: Is the null string the correct value to return?
 	}
 	return "Unrecognized";
 }
@@ -551,8 +553,8 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
 		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing integer pixels to floating point file");
 		return;
 	}
-	
-	uint8_t num_components = GetNumberOfComponents();
+
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_int_row = datum_ptr;
 	ReadRow(row);
@@ -577,7 +579,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_float_row = datum_ptr;
 	ReadRow(row);
@@ -602,7 +604,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_double_row = datum_ptr;
 	ReadRow(row);
@@ -968,7 +970,7 @@ bool HdrDpxImageElement::IsNextSame(uint32_t xpos, int32_t pixel[])
 
 void HdrDpxImageElement::WriteLineEnd(Fifo *fifo)
 {
-	if (fifo->m_fullness & 0x1f)   // not an even multiple of 32 
+	if (fifo->m_fullness & 0x1f)   // not an even multiple of 32
 		fifo->PutDatum(0, 32 - (fifo->m_fullness & 0x1f), m_direction_r2l);
 	WriteFlush(fifo);
 }
@@ -993,7 +995,7 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_int_row = datum_ptr;
 	WriteRow(row);
@@ -1018,7 +1020,7 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, float *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_float_row = datum_ptr;
 	WriteRow(row);
@@ -1043,7 +1045,7 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
+	//uint8_t num_components = GetNumberOfComponents();
 
 	m_double_row = datum_ptr;
 	WriteRow(row);
@@ -1055,13 +1057,13 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	int component;
 	int num_components;
 	Fifo fifo(16);
-	bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
+	//bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
 	uint32_t run_length = 0;
-	bool freeze_increment = false;
+	//bool freeze_increment = false;
 	unsigned int max_run;
 	bool run_type;
 	int32_t rle_pixel[8];
-	uint32_t row_wr_idx;
+	//uint32_t row_wr_idx;
 	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
 
 	if (m_dpx_ie_ptr->Encoding == 1)
@@ -1109,7 +1111,7 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	xpos = 0;
 
 	// write
-	row_wr_idx = 0;
+	//row_wr_idx = 0;
 	m_row_rd_idx = 0;
 	xpos = 0;
 	while (xpos < m_width)
@@ -1130,7 +1132,7 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 				if (num_components > 1)
 					run_type = IsNextSame(xpos, rle_pixel);
 				else  // For 1-component IEs, it doesn't make sense to declare a run unleses it lasts more than 2 pixels
-					run_type = IsNextSame(xpos, rle_pixel) && IsNextSame(xpos + 1, rle_pixel); 
+					run_type = IsNextSame(xpos, rle_pixel) && IsNextSame(xpos + 1, rle_pixel);
 				if (run_type)  //  Same run
 				{
 					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
@@ -1342,7 +1344,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth field, HdrDpxBitDepth va
 		m_dpx_ie_ptr->LowData.d = UINT32_MAX;
 	}
 	m_dpx_ie_ptr->BitSize = static_cast<uint8_t>(value);
-	
+
 }
 
 HdrDpxBitDepth HdrDpxImageElement::GetHeader(HdrDpxFieldsBitDepth field) const
