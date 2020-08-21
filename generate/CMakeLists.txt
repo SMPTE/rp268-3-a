@@ -2,10 +2,17 @@
 
 cmake_minimum_required(VERSION 3.17)
 
-set(CMAKE_C_COMPILER "gcc-10")
-set(CMAKE_CXX_COMPILER "g++-10")
+# Do not select the toolchain until the system name is available
+project(generate_color_test_pattern NONE)
 
-project(generate_color_test_pattern)
+# The system name is set by the project line above
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	set(CMAKE_C_COMPILER "gcc-10")
+	set(CMAKE_CXX_COMPILER "g++-10")
+endif ()
+
+# Enable use of C and C++ after the toolchain has been selected
+enable_language(C CXX)
 
 # The location of the top-level directory for this project
 set(ROOT ${CMAKE_SOURCE_DIR}/..)
