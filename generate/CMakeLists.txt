@@ -1,6 +1,6 @@
 # CMakeLists.txt for color test pattern generator
 
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.16)
 
 # Do not select the toolchain until the system name is available
 project(generate_color_test_pattern NONE)

@@ -1,6 +1,6 @@
 # CMakeLists.txt for dump tool
 
-cmake_minimum_required(VERSION 3.17)
+cmake_minimum_required(VERSION 3.16)
 
 # Do not select the toolchain until the system name is available
 project(dump_dpx NONE)
