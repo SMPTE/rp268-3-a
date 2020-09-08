@@ -1130,6 +1130,7 @@ namespace Dpx {
 		HdrDpxColorDifferenceSiting GetHeader(HdrDpxFieldsColorDifferenceSiting field) const;
 
 		std::vector<DatumLabel> GetDatumLabels(void) const;
+		uint8_t GetDatumLabelIndex(DatumLabel dl) const;
 		uint8_t GetNumberOfComponents(void) const;
 		std::string DatumLabelToName(Dpx::DatumLabel datum_label) const;
 

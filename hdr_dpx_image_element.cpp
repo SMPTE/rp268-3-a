@@ -497,6 +497,16 @@ uint8_t HdrDpxImageElement::GetNumberOfComponents(void) const
 	return static_cast<int>(GetDatumLabels().size());
 }
 
+uint8_t HdrDpxImageElement::GetDatumLabelIndex(DatumLabel dl) const
+{
+	uint8_t i;
+	std::vector<DatumLabel> dl_list = GetDatumLabels();
+	for (i = 0; i < GetNumberOfComponents(); ++i)
+		if (dl == dl_list[i])
+			return i;
+	return 0xff;
+}
+
 uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 {
 	uint8_t num_c = GetNumberOfComponents();
@@ -1272,9 +1282,9 @@ float HdrDpxImageElement::GetHeader(HdrDpxIEFieldsR32 field) const
 		return m_dpx_ie_ptr->LowQuantity;
 	case eReferenceHighDataCode:
 		if (m_dpx_ie_ptr->BitSize >= 32)
-			return m_dpx_ie_ptr->LowData.f;
+			return m_dpx_ie_ptr->HighData.f;
 		else
-			return (float)(m_dpx_ie_ptr->LowData.d);
+			return (float)(m_dpx_ie_ptr->HighData.d);
 	case eReferenceHighQuantity:
 		return m_dpx_ie_ptr->HighQuantity;
 	}
@@ -1459,6 +1469,7 @@ void HdrDpxImageElement::CopyHeaderFrom(HdrDpxImageElement *ie)
 	*m_dpx_ie_ptr = *(ie->m_dpx_ie_ptr);
 	SetHeader(eColorDifferenceSiting, ie->GetHeader(eColorDifferenceSiting));
 }
+
 
 /*
 bool HdrDpxImageElement::IsOk(void)
