@@ -914,7 +914,7 @@ int main(int argc, char *argv[])
 
 	// Initialization can be in any order, but changes must be frozen before OpenForWriting() call
 	dpxf.SetHeader(Dpx::ePixelsPerLine, width);
-	dpxf.SetHeader(Dpx::eLinesPerElement, height);
+	dpxf.SetHeader(Dpx::eLinesPerImageElement, height);
 	dpxf.SetHeader(Dpx::eDatumMappingDirection, datum_mapping_direction);
 	dpxf.SetHeader(Dpx::eByteOrder, byte_order);
 
@@ -941,18 +941,18 @@ int main(int argc, char *argv[])
 		// Metadata fields can be set at any point
 		if (tftype == TF_SDR)
 		{
-			ie->SetHeader(Dpx::eColorimetric, Dpx::eColorimetricBT_709);
-			ie->SetHeader(Dpx::eTransfer, Dpx::eTransferBT_709);
+			ie->SetHeader(Dpx::eColorimetricSpecification, Dpx::eColorimetricBT_709);
+			ie->SetHeader(Dpx::eTransferCharacteristic, Dpx::eTransferBT_709);
 		}
 		else if (tftype == TF_PQ)
 		{
-			ie->SetHeader(Dpx::eColorimetric, Dpx::eColorimetricBT_2020);
-			ie->SetHeader(Dpx::eTransfer, Dpx::eTransferBT_2100_PQ_NCL);
+			ie->SetHeader(Dpx::eColorimetricSpecification, Dpx::eColorimetricBT_2020);
+			ie->SetHeader(Dpx::eTransferCharacteristic, Dpx::eTransferBT_2100_PQ_NCL);
 		}
 		else if (tftype == TF_HLG)
 		{
-			ie->SetHeader(Dpx::eColorimetric, Dpx::eColorimetricBT_2020);
-			ie->SetHeader(Dpx::eTransfer, Dpx::eTransferBT_2100_HLG_NCL);
+			ie->SetHeader(Dpx::eColorimetricSpecification, Dpx::eColorimetricBT_2020);
+			ie->SetHeader(Dpx::eTransferCharacteristic, Dpx::eTransferBT_2100_HLG_NCL);
 		}
 		else
 		{
@@ -963,7 +963,7 @@ int main(int argc, char *argv[])
 
 
 	// Set header values as desired (defaults assumed based on image element structure)
-	dpxf.SetHeader(Dpx::eCopyright, "(C) 20XX Not a real copyright");  // Key is a string, value matches data type
+	dpxf.SetHeader(Dpx::eRightToUseOrCopyright, "(C) 20XX Not a real copyright");  // Key is a string, value matches data type
 	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
 	if (dpxf.Validate())
 	{

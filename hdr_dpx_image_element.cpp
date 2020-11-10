@@ -1441,6 +1441,32 @@ HdrDpxColorDifferenceSiting HdrDpxImageElement::GetHeader(HdrDpxFieldsColorDiffe
 	return static_cast<HdrDpxColorDifferenceSiting>(m_dpx_hdr_ptr->ImageHeader.ChromaSubsampling >> (m_ie_index * 4) & 0xf);
 }
 
+void HdrDpxImageElement::SetHeader(HdrDpxIEFieldsString field, std::string value)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	switch (field)
+	{
+	case eDescriptionOfImageElement:
+		if (CopyStringN(m_dpx_ie_ptr->Description, value, DESCRIPTION_SIZE))
+			m_warnings.push_back("SetHeader(): Specified description of IE (" + value + ") exceeds header field size\n");
+		break;
+	}
+}
+
+std::string HdrDpxImageElement::GetHeader(HdrDpxIEFieldsString field) const
+{
+	switch (field)
+	{
+	case eDescriptionOfImageElement:
+		return CopyToStringN(m_dpx_ie_ptr->Description, FILE_NAME_SIZE);
+	}
+	return "";
+}
+
 uint32_t HdrDpxImageElement::GetWidth(void) const
 {
 	return m_width;

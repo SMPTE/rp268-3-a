@@ -79,6 +79,33 @@ static int g_HdrDpxStringLengths[] =
 	100
 };
 
+bool Dpx::CopyStringN(char *dest, std::string src, int max_length)
+{
+	for (int idx = 0; idx < max_length; ++idx)
+	{
+		if (idx >= src.length())
+			*(dest++) = '\0';
+		else
+			*(dest++) = src[idx];
+	}
+	return (src.length() > max_length);  // return true if the string is longer than the field
+}
+
+std::string Dpx::CopyToStringN(const char *src, int max_length) 
+{
+	std::string s("");
+
+	for (int idx = 0; idx < max_length; ++idx)
+	{
+		if (*src == '\0')
+			return s;
+		else
+			s.push_back(*(src++));
+	}
+	return s;
+}
+
+
 HdrDpxFile::HdrDpxFile(std::string filename)
 {
 	union
@@ -152,6 +179,7 @@ void HdrDpxFile::OpenForReading(std::string filename)
 
 	m_open_for_write = false;
 	m_open_for_read = true;
+	m_is_header_locked = true;
 }
 
 HdrDpxImageElement *HdrDpxFile::GetImageElement(uint8_t ie_idx)
@@ -446,11 +474,11 @@ void HdrDpxFile::FillCoreFields()
 			// Set ununsed image elements to all 1's
 			memset((void *)&(m_dpx_header.ImageHeader.ImageElement[ie_idx]), 0xff, sizeof(HDRDPX_IMAGEELEMENT));
 		}
-		if (m_IE[ie_idx].GetHeader(eTransfer) == eTransferUndefined)
+		if (m_IE[ie_idx].GetHeader(eTransferCharacteristic) == eTransferUndefined)
 		{
 			LOG_ERROR(eMissingCoreField, eWarning, "Transfer characteristic for image element " + std::to_string(ie_idx + 1) + " not specified");
 		}
-		if (m_IE[ie_idx].GetHeader(eColorimetric) == eColorimetricUndefined)
+		if (m_IE[ie_idx].GetHeader(eColorimetricSpecification) == eColorimetricUndefined)
 		{
 			LOG_ERROR(eMissingCoreField, eWarning, "Colorimetric field for image element " + std::to_string(ie_idx + 1) + " not specified");
 		}
@@ -525,6 +553,7 @@ void HdrDpxFile::OpenForWriting(std::string filename)
 	}
 	m_open_for_write = true;
 	m_open_for_read = false;
+	m_is_header_locked = true;
 	m_file_is_hdr_version = true;
 }
 
@@ -570,6 +599,7 @@ void HdrDpxFile::Close()
 			m_IE[ie_idx].m_isinitialized = false;
 		m_open_for_read = false;
 		m_open_for_write = false;
+		m_is_header_locked = false;
 	}
 }
 
@@ -727,24 +757,254 @@ std::string HdrDpxFile::DumpHeader() const
 }
 
 
+static bool IsStringAllFs(std::string s, const int max_size)
+{
+	if (s.length() < max_size)
+		return false;
+	for (int i = 0; i < max_size; ++i)
+		if (s[i] != 255)
+			return false;
+	return true;
+}
+
+static int days_in_month[] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+static bool ValidateTimeDate(std::string s, std::string &errmsg)
+{
+	int month = 1, day, hour, minute, second;
+
+	errmsg = "";
+	if (s.length() == 0)	// Undefined Time & Date string is valid
+		return false;
+	// yyyy:MM:dd:hh:mm:ssLTZ
+	if (s[4] != ':' || s[7] != ':' || s[10] != ':' || s[13] != ':' || s[16] != ':')
+		errmsg += "Time & Date field is not properly delimited by colons; ";
+	// Validate that the year contains only numerals:
+	if (!isdigit(s[0]) || !isdigit(s[1]) || !isdigit(s[2]) || !isdigit(s[3]))
+		errmsg += "yyyy field is not numeric; ";
+	if (!isdigit(s[5]) || !isdigit(s[6]))
+		errmsg += "MM field is not numeric; ";
+	else
+	{
+		month = std::stoi(s.substr(5, 2));
+		if (month < 1 || month > 12)
+			errmsg += "MM field is not between 1 and 12; ";
+	}
+	if (!isdigit(s[8] || !isdigit(s[9])))
+		errmsg += "dd field is not numeric; ";
+	day = std::stoi(s.substr(8, 2));
+	if (day < 1 || day > days_in_month[month - 1])
+		errmsg += "dd field is not valid; ";
+	if (!isdigit(s[11]) || !isdigit(s[12]))
+		errmsg += "hh field is not numeric; ";
+	hour = std::stoi(s.substr(11, 2));
+	if (hour > 23)
+		errmsg += "hh field is > 23; ";
+	if (!isdigit(s[14]) || !isdigit(s[15]))
+		errmsg += "mm field is not numeric; ";
+	minute = std::stoi(s.substr(14, 2));
+	if (minute > 60)
+		errmsg += "mm field is > 60";
+	if (!isdigit(s[17]) || !isdigit(s[18]))
+		errmsg += "ss field is not numeric; ";
+	second = std::stoi(s.substr(14, 2));
+	if (second > 60)
+		errmsg += "ss field is > 60";
+
+	return (errmsg.length() > 0);
+}
+
 
 bool HdrDpxFile::Validate()
 {
-	// TBD:: Add validation warnings/info
+	std::string errmsg;
+
+	if(GetHeader(eDittoKey) > eDittoKeySame && GetHeader(eDittoKey) != eDittoKeyUndefined)
+		LOG_ERROR(eValidationError, eWarning, "Ditto Key field has invalid value");
+	if(GetHeader(eGenericSectionHeaderLength) != 1664)
+		LOG_ERROR(eValidationError, eWarning, "Generic Size field has invalid value");
+	if(GetHeader(eIndustrySpecificHeaderLength) != 384)
+		LOG_ERROR(eValidationError, eWarning, "Industry Size field has invalid value");
+	if(GetHeader(eUserDefinedHeaderLength) == UINT32_MAX)
+		LOG_ERROR(eValidationError, eWarning, "User Data Size field shall not be undefined");	
+	if (IsStringAllFs(GetHeader(eImageFileName), 100))
+		LOG_ERROR(eValidationError, eWarning, "File name field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eCreationDateTime), 24))
+		LOG_ERROR(eValidationError, eWarning, "Time & date field is all 0xff bytes; undefined strings should use single null character");
+	if (ValidateTimeDate(GetHeader(eCreationDateTime), errmsg))
+		LOG_ERROR(eValidationError, eWarning, "Creator time and date field not properly constructed: " + errmsg);
+	if (IsStringAllFs(GetHeader(eCreator), 100))
+		LOG_ERROR(eValidationError, eWarning, "Creator field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eProjectName), 200))
+		LOG_ERROR(eValidationError, eWarning, "Project field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eRightToUseOrCopyright), 200))
+		LOG_ERROR(eValidationError, eWarning, "Copyright field is all 0xff bytes; undefined strings should use single null character");
+	if(GetHeader(eDatumMappingDirection) > eDatumMappingDirectionL2R)
+		LOG_ERROR(eValidationError, eWarning, "Datum mapping direction field has invalid value");
+	// TBD: Verify no collisions in file map
+
+	if(GetHeader(eOrientation) > eOrientationB2T_R2L && GetHeader(eOrientation) != eOrientationUndefined)
+		LOG_ERROR(eValidationError, eWarning, "Orientation field has invalid value");
+	if (GetHeader(eOrientation) != eOrientationT2B_L2R)
+		LOG_ERROR(eValidationError, eWarning, "Some readers might not interpret a non-core Orientation field value");
+	if(GetHeader(eNumberOfImageElements) < 1 || GetHeader(eNumberOfImageElements) > 8)
+		LOG_ERROR(eValidationError, eWarning, "Number of image elements field has invalid value");
+	if(GetHeader(ePixelsPerLine) == 0)
+		LOG_ERROR(eValidationError, eWarning, "Pixels per line field is equal to 0");
+	if(GetHeader(eLinesPerImageElement) == 0)
+		LOG_ERROR(eValidationError, eWarning, "Lines per image element field is equal to 0");
+
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
+	{
+		float range_lo, range_hi;
+		if (m_IE[ie_idx].GetHeader(eOffsetToData) == UINT32_MAX)   // indicates the IE is not present
+			continue;
+		if(m_IE[ie_idx].GetHeader(eDataSign) > eDataSignSigned)
+			LOG_ERROR(eValidationError, eWarning, "Data sign field has invalid value");
+		if (m_IE[ie_idx].GetHeader(eDataSign) != eDataSignUnsigned)
+			LOG_ERROR(eValidationError, eWarning, "Some readers might not interpret a signed data sign field value");
+		switch (m_IE[ie_idx].GetHeader(eBitDepth))
+		{
+		case eBitDepth1:
+			range_lo = 0;
+			range_hi = 1; 
+			break;
+		case eBitDepth8:
+			range_lo = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 0.0f : -128.0f;
+			range_hi = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 255.0f : 127.0f;
+			break;
+		case eBitDepth10:
+			range_lo = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 0.0f : -512.0f;
+			range_hi = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 1023.0f : 511.0f;
+			break;
+		case eBitDepth12:
+			range_lo = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 0.0f : -2048.0f;
+			range_hi = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 4191.0f : 2047.0f;
+			break;
+		case eBitDepth16:
+			range_lo = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 0.0f : -32768.0f;
+			range_hi = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 65535.0f : 32767.0f;
+			break;
+		case eBitDepthR32:
+		case eBitDepthR64:
+			range_lo = -INFINITY;
+			range_hi = INFINITY;
+			break;
+		default:
+			LOG_ERROR(eValidationError, eWarning, "Invalid bit depth field");
+		}
+		if (m_IE[ie_idx].GetHeader(eReferenceHighDataCode) < range_lo || m_IE[ie_idx].GetHeader(eReferenceHighDataCode) > range_hi)
+			LOG_ERROR(eValidationError, eWarning, "Range high code value is not reprentable within specified bit depth");
+		if (m_IE[ie_idx].GetHeader(eReferenceLowDataCode) < range_lo || m_IE[ie_idx].GetHeader(eReferenceLowDataCode) > range_hi)
+			LOG_ERROR(eValidationError, eWarning, "Range low code value is not reprentable within specified bit depth");
+
+		if (!(m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCb) &&
+			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescRGB_268_1 && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescABGR) &&
+			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescCbYCrY && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCYAYA) &&
+			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescGeneric2 && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescGeneric8))
+			LOG_ERROR(eValidationError, eFatal, "Descriptor core field is invalid\n");
+		if (!(m_IE[ie_idx].GetHeader(eTransferCharacteristic) > eTransferIEC_61966_2_1))
+			LOG_ERROR(eValidationError, eWarning, "Transfer Characteristic core field is invalid\n");
+		if (!(m_IE[ie_idx].GetHeader(eColorimetricSpecification) > eColorimetricST_2065_1_ACES))
+			LOG_ERROR(eValidationError, eWarning, "Colormetric Specification core field is invalid\n");
+		if (m_IE[ie_idx].GetHeader(eBitDepth) == eBitDepth10 || m_IE[ie_idx].GetHeader(eBitDepth) == eBitDepth12)
+		{
+			if (m_IE[ie_idx].GetHeader(ePacking) > ePackingFilledMethodB)
+				LOG_ERROR(eValidationError, eWarning, "Packing core field is invalid\n");
+		}
+		else
+		{
+			if (m_IE[ie_idx].GetHeader(ePacking) != ePackingPacked)
+				LOG_ERROR(eValidationError, eWarning, "Packing core field should be 0 (packed) for bit depths other than 10 or 12\n");
+		}
+		if (m_IE[ie_idx].GetHeader(eEncoding) > eEncodingRLE)
+			LOG_ERROR(eValidationError, eWarning, "Encoding core field is invalid\n");
+		if (m_IE[ie_idx].GetHeader(eOffsetToData) & 3)
+			LOG_ERROR(eValidationError, eWarning, "Offset to data is required to be multiple of 4\n");
+		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) & 3)
+			LOG_ERROR(eValidationError, eWarning, "End of line padding is required to be multiple of 4\n");
+		if ((m_IE[ie_idx].GetHeader(eEndOfImagePadding) & 3) && m_IE[ie_idx].GetHeader(eEndOfImagePadding) != UINT32_MAX)
+			LOG_ERROR(eValidationError, eWarning, "End of image padding is required to be multiple of 4\n");
+		if (IsStringAllFs(m_IE[ie_idx].GetHeader(eDescriptionOfImageElement), 32))
+			LOG_ERROR(eValidationError, eWarning, "Description of IE field is all 0xff bytes; undefined strings should use single null character");
+		if (m_IE[ie_idx].GetHeader(eColorDifferenceSiting) > eSitingInterstitialHInterstitialV && m_IE[ie_idx].GetHeader(eColorDifferenceSiting) != eSitingUndefined)
+			LOG_ERROR(eValidationError, eWarning, "Color difference siting field has invalid value\n");
+	}
+
+	// No validation for X/Y offset, center, original size
+	if (IsStringAllFs(GetHeader(eSourceImageFileName), 100))
+		LOG_ERROR(eValidationError, eWarning, "Source filename field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eSourceImageDateTime), 24))
+		LOG_ERROR(eValidationError, eWarning, "Source time & date field is all 0xff bytes; undefined strings should use single null character");
+	if (ValidateTimeDate(GetHeader(eSourceImageDateTime), errmsg))
+		LOG_ERROR(eValidationError, eWarning, "Source time and date field not properly constructed: " + errmsg);
+	if (IsStringAllFs(GetHeader(eInputDeviceName), 32))
+		LOG_ERROR(eValidationError, eWarning, "Input device name field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eInputDeviceSN), 32))
+		LOG_ERROR(eValidationError, eWarning, "Input device SN field is all 0xff bytes; undefined strings should use single null character");
+	if (GetHeader(eBorderValidityXL) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXL) != UINT16_MAX)
+		LOG_ERROR(eValidationError, eWarning, "Border validity XL field is larger than image width");
+	if (GetHeader(eBorderValidityXR) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXR) != UINT16_MAX)
+		LOG_ERROR(eValidationError, eWarning, "Border validity XR field is larger than image width");
+	if (GetHeader(eBorderValidityYT) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYT) != UINT16_MAX)
+		LOG_ERROR(eValidationError, eWarning, "Border validity YT field is larger than image height");
+	if (GetHeader(eBorderValidityYB) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYB) != UINT16_MAX)
+		LOG_ERROR(eValidationError, eWarning, "Border validity YB field is larger than image height");
+	// No validation for pixel aspect ratio or X/Y scanned size
+
+	if (IsStringAllFs(GetHeader(eFilmMfgIdCode), 2))
+		LOG_ERROR(eValidationError, eWarning, "Film Mfg ID code field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eFilmType), 2))
+		LOG_ERROR(eValidationError, eWarning, "Film type field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eOffsetInPerfs), 2))
+		LOG_ERROR(eValidationError, eWarning, "Offset in perfs field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(ePrefix), 6))
+		LOG_ERROR(eValidationError, eWarning, "Prefix field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eCount), 4))
+		LOG_ERROR(eValidationError, eWarning, "Count field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eFormat), 32))
+		LOG_ERROR(eValidationError, eWarning, "Format field is all 0xff bytes; undefined strings should use single null character");
+	if (GetHeader(eFramePositionInSequence) != UINT32_MAX && GetHeader(eSequenceLength) != UINT32_MAX && 
+		GetHeader(eFramePositionInSequence) > GetHeader(eSequenceLength))
+		LOG_ERROR(eValidationError, eWarning, "Frame position field is larger than sequence length field");
+	// No validation for Held count, frame rate of original, shutter angle
+	if (IsStringAllFs(GetHeader(eFrameIdentification), 32))
+		LOG_ERROR(eValidationError, eWarning, "Frame identification field is all 0xff bytes; undefined strings should use single null character");
+	if (IsStringAllFs(GetHeader(eSlateInformation), 100))
+		LOG_ERROR(eValidationError, eWarning, "Slate information field is all 0xff bytes; undefined strings should use single null character");
+
+	// No validation for SMPTE time code or user bits
+	if(GetHeader(eInterlace) != eInterlaceUndefined && GetHeader(eInterlace) > eInterlace2_1)
+		LOG_ERROR(eValidationError, eWarning, "Interlace field contains unknown value");
+	if(GetHeader(eFieldNumber) != UINT8_MAX && GetHeader(eFieldNumber) > 12)
+		LOG_ERROR(eValidationError, eWarning, "Field number field should not exceed 12 (see definition in ST 268-1)");
+	if(GetHeader(eVideoSignalStandard) > eVideoSignalSECAM &&
+		!(GetHeader(eVideoSignalStandard) >= eVideoSignalBT_601_525_4x3 || GetHeader(eVideoSignalStandard) <= eVideoSignalBT_601_625_4x3) &&
+		!(GetHeader(eVideoSignalStandard) >= eVideoSignalBT_601_525_16x9 || GetHeader(eVideoSignalStandard) <= eVideoSignalBT_601_625_16x9) &&
+		!(GetHeader(eVideoSignalStandard) >= eVideoSignalYCbCr_int_1050ln_16x9 || GetHeader(eVideoSignalStandard) <= eVideoSignalYCbCr_int_1125ln_16x9_ST_240) &&
+		!(GetHeader(eVideoSignalStandard) >= eVideoSignalYCbCr_prog_525ln_16x9 || GetHeader(eVideoSignalStandard) <= eVideoSignalYCbCr_prog_1125ln_16x9_ST_274) &&
+		GetHeader(eVideoSignalStandard) != eVideoSignalCTA_VIC &&
+		GetHeader(eVideoSignalStandard) != eVideoSignalUndefined)
+		LOG_ERROR(eValidationError, eWarning, "Video signal standard field does not contain recognized value");
+	// No validation for horiz sample rate, vert sample rate, temp samle rate, time offset, gamma, black code, black gain, breakpoint, white code value, integration time
+
+	if(GetHeader(eVideoSignalStandard) != eVideoSignalCTA_VIC && GetHeader(eVideoIdentificationCode) != eVIC_undefined)
+		LOG_ERROR(eValidationError, eWarning, "Video signal standard field does not indicate CTA VIC but CTA VIC is indicated");
+	if(GetHeader(eVideoSignalStandard) == eVideoSignalCTA_VIC && GetHeader(eVideoIdentificationCode) == eVIC_undefined)
+		LOG_ERROR(eValidationError, eWarning, "Video signal standard field indicates CTA VIC but no CTA VIC value is indicated");
+
+	if(GetHeader(eVideoIdentificationCode) != eVIC_undefined && 
+		!(GetHeader(eVideoIdentificationCode) <= eVIC_2160p2x100) &&
+		!(GetHeader(eVideoIdentificationCode) >= eVIC_2160p2x120 && GetHeader(eVideoIdentificationCode) <= eVIC_4096x2160p120))
+		LOG_ERROR(eValidationError, eWarning, "Video identification code (VIC) field has unrecognized value");
+
+	
+	if (m_filemap.CheckCollisions())
+		LOG_ERROR(eValidationError, eWarning, "Image map has potentially overlapping regions");
+
+	// Do we need any other validation warnings/info?
+
 
 	return m_err.GetWorstSeverity() != eInformational;
-}
-
-bool HdrDpxFile::CopyStringN(char *dest, std::string src, int max_length)
-{
-	for (int idx = 0; idx < max_length; ++idx)
-	{
-		if (idx >= src.length())
-			*(dest++) = '\0';
-		else
-			*(dest++) = src[idx];
-	}
-	return (src.length() > max_length);  // return true if the string is longer than the field
 }
 
 std::size_t utf8_length(const std::string &utf8_string)
@@ -768,13 +1028,18 @@ std::size_t utf8_length(const std::string &utf8_string)
 void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 {
 	std::size_t length;
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	switch (field)
 	{
-	case eFileName:
+	case eImageFileName:
 		if(CopyStringN(m_dpx_header.FileHeader.FileName, value, FILE_NAME_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified file name (" + value + ") exceeds header field size\n");
 		break;
-	case eTimeDate:
+	case eCreationDateTime:
 		if (CopyStringN(m_dpx_header.FileHeader.TimeDate, value, TIMEDATE_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified time & date (" + value + ") exceeds header field size\n");
 		break;
@@ -782,31 +1047,31 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 		if (CopyStringN(m_dpx_header.FileHeader.Creator, value, CREATOR_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified creator (" + value + ") exceeds header field size\n");
 		break;
-	case eProject:
+	case eProjectName:
 		if (CopyStringN(m_dpx_header.FileHeader.Project, value, PROJECT_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified project (" + value + ") exceeds header field size\n");
 		break;
-	case eCopyright:
+	case eRightToUseOrCopyright:
 		if (CopyStringN(m_dpx_header.FileHeader.Copyright, value, COPYRIGHT_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified copyright (" + value + ") exceeds header field size\n");
 		break;
-	case eSourceFileName:
+	case eSourceImageFileName:
 		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceFileName, value, FILE_NAME_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified source file name (" + value + ") exceeds header field size\n");
 		break;
-	case eSourceTimeDate:
+	case eSourceImageDateTime:
 		if (CopyStringN(m_dpx_header.SourceInfoHeader.SourceTimeDate, value, TIMEDATE_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified source time & date (" + value + ") exceeds header field size\n");
 		break;
-	case eInputName:
+	case eInputDeviceName:
 		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputName, value, INPUTNAME_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified input name (" + value + ") exceeds header field size\n");
 		break;
-	case eInputSN:
+	case eInputDeviceSN:
 		if (CopyStringN(m_dpx_header.SourceInfoHeader.InputSN, value, INPUTSN_SIZE))
 			m_warn_messages.push_back("SetHeader(): Specified input SN (" + value + ") exceeds header field size\n");
 		break;
-	case eFilmMfgId:
+	case eFilmMfgIdCode:
 		if (CopyStringN(m_dpx_header.FilmHeader.FilmMfgId, value, 2))
 			m_warn_messages.push_back("SetHeader(): Specified film mfg id (" + value + ") exceeds header field size\n");
 		break;
@@ -814,7 +1079,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 		if (CopyStringN(m_dpx_header.FilmHeader.FilmType, value, 2))
 			m_warn_messages.push_back("SetHeader(): Specified film type (" + value + ") exceeds header field size\n");
 		break;
-	case eOffsetPerfs:
+	case eOffsetInPerfs:
 		if (CopyStringN(m_dpx_header.FilmHeader.OffsetPerfs, value, 4))
 			m_warn_messages.push_back("SetHeader(): Specified offset perfs (" + value + ") exceeds header field size\n");
 		break;
@@ -830,11 +1095,11 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 		if (CopyStringN(m_dpx_header.FilmHeader.Format, value, 32))
 			m_warn_messages.push_back("SetHeader(): Specified film format (" + value + ") exceeds header field size\n");
 		break;
-	case eFrameId:
+	case eFrameIdentification:
 		if (CopyStringN(m_dpx_header.FilmHeader.FrameId, value, 32))
 			m_warn_messages.push_back("SetHeader(): Specified frame ID (" + value + ") exceeds header field size\n");
 		break;
-	case eSlateInfo:
+	case eSlateInformation:
 		if (CopyStringN(m_dpx_header.FilmHeader.SlateInfo, value, 100))
 			m_warn_messages.push_back("SetHeader(): Specified slate info (" + value + ") exceeds header field size\n");
 		break;
@@ -859,47 +1124,34 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsString field, const std::string &value)
 	}
 }
 
-std::string HdrDpxFile::CopyToStringN(const char *src, int max_length) const
-{
-	std::string s ("");
-
-	for (int idx = 0; idx < max_length; ++idx)
-	{
-		if (*src == '\0')
-			return s;
-		else
-			s.push_back(*(src++));
-	}
-	return s;
-}
 
 std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 {
 	switch (field)
 	{
-	case eFileName:
+	case eImageFileName:
 		return CopyToStringN(m_dpx_header.FileHeader.FileName, FILE_NAME_SIZE);
-	case eTimeDate:
+	case eCreationDateTime:
 		return CopyToStringN(m_dpx_header.FileHeader.TimeDate, TIMEDATE_SIZE);
 	case eCreator:
 		return CopyToStringN(m_dpx_header.FileHeader.Creator, CREATOR_SIZE);
-	case eProject:
+	case eProjectName:
 		return CopyToStringN(m_dpx_header.FileHeader.Project, PROJECT_SIZE);
-	case eCopyright:
+	case eRightToUseOrCopyright:
 		return CopyToStringN(m_dpx_header.FileHeader.Copyright, COPYRIGHT_SIZE);
-	case eSourceFileName:
+	case eSourceImageFileName:
 		return CopyToStringN(m_dpx_header.SourceInfoHeader.SourceFileName, FILE_NAME_SIZE);
-	case eSourceTimeDate:
+	case eSourceImageDateTime:
 		return CopyToStringN(m_dpx_header.SourceInfoHeader.SourceTimeDate, TIMEDATE_SIZE);
-	case eInputName:
+	case eInputDeviceName:
 		return CopyToStringN(m_dpx_header.SourceInfoHeader.InputName, INPUTNAME_SIZE);
-	case eInputSN:
+	case eInputDeviceSN:
 		return CopyToStringN(m_dpx_header.SourceInfoHeader.InputSN, INPUTSN_SIZE);
-	case eFilmMfgId:
+	case eFilmMfgIdCode:
 		return CopyToStringN(m_dpx_header.FilmHeader.FilmMfgId, 2);
 	case eFilmType:
 		return CopyToStringN(m_dpx_header.FilmHeader.FilmType, 2);
-	case eOffsetPerfs:
+	case eOffsetInPerfs:
 		return CopyToStringN(m_dpx_header.FilmHeader.OffsetPerfs, 4);
 	case ePrefix:
 		return CopyToStringN(m_dpx_header.FilmHeader.Prefix, 6);
@@ -907,9 +1159,9 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 		return CopyToStringN(m_dpx_header.FilmHeader.Count, 4);
 	case eFormat:
 		return CopyToStringN(m_dpx_header.FilmHeader.Format, 32);
-	case eFrameId:
+	case eFrameIdentification:
 		return CopyToStringN(m_dpx_header.FilmHeader.FrameId, 32);
-	case eSlateInfo:
+	case eSlateInformation:
 		return CopyToStringN(m_dpx_header.FilmHeader.SlateInfo, 100);
 	case eUserIdentification:
 		return CopyToStringN(m_dpx_userdata.UserIdentification, 32);
@@ -929,25 +1181,30 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsU32 field, uint32_t value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	switch (field)
 	{
-	case eImageOffset:
+	case eOffsetToImageData:
 		m_dpx_header.FileHeader.ImageOffset = value;
 		break;
-	case eFileSize:
+	case eTotalImageFileSize:
 		m_dpx_header.FileHeader.FileSize = value;
 		break;
-	case eGenericSize:
+	case eGenericSectionHeaderLength:
 		m_dpx_header.FileHeader.GenericSize = value;
 		break;
-	case eIndustrySize:
+	case eIndustrySpecificHeaderLength:
 		m_dpx_header.FileHeader.IndustrySize = value;
 		break;
 	case eUserDefinedHeaderLength:
 		//m_dpx_header.FileHeader.UserSize = value;
 		LOG_ERROR(eBadParameter, eWarning, "User data length can only be set by calling SetUserData() or SetHeader() using eUserDefinedData and a string");
 		break;
-	case eEncryptKey:
+	case eEncryptionKey:
 		m_dpx_header.FileHeader.EncryptKey = value;
 		break;
 	case eStandardsBasedMetadataOffset:
@@ -956,7 +1213,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 field, uint32_t value)
 	case ePixelsPerLine:
 		m_dpx_header.ImageHeader.PixelsPerLine = value;
 		break;
-	case eLinesPerElement:
+	case eLinesPerImageElement:
 		m_dpx_header.ImageHeader.LinesPerElement = value;
 		break;
 	case eXOffset:
@@ -971,13 +1228,13 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 field, uint32_t value)
 	case eYOriginalSize:
 		m_dpx_header.SourceInfoHeader.YOriginalSize = value;
 		break;
-	case eAspectRatioH:
+	case ePixelAspectRatioH:
 		m_dpx_header.SourceInfoHeader.AspectRatio[0] = value;
 		break;
-	case eAspectRatioV:
+	case ePixelAspectRatioV:
 		m_dpx_header.SourceInfoHeader.AspectRatio[1] = value;
 		break;
-	case eFramePosition:
+	case eFramePositionInSequence:
 		m_dpx_header.FilmHeader.FramePosition = value;
 		break;
 	case eSequenceLength:
@@ -995,23 +1252,23 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 field) const
 {
 	switch (field)
 	{
-	case eImageOffset:
+	case eOffsetToImageData:
 		return(m_dpx_header.FileHeader.ImageOffset);
-	case eFileSize:
+	case eTotalImageFileSize:
 		return(m_dpx_header.FileHeader.FileSize);
-	case eGenericSize:
+	case eGenericSectionHeaderLength:
 		return(m_dpx_header.FileHeader.GenericSize);
-	case eIndustrySize:
+	case eIndustrySpecificHeaderLength:
 		return(m_dpx_header.FileHeader.IndustrySize);
 	case eUserDefinedHeaderLength:
 		return(m_dpx_header.FileHeader.UserSize);
-	case eEncryptKey:
+	case eEncryptionKey:
 		return(m_dpx_header.FileHeader.EncryptKey);
 	case eStandardsBasedMetadataOffset:
 		return(m_dpx_header.FileHeader.StandardsBasedMetadataOffset);
 	case ePixelsPerLine:
 		return(m_dpx_header.ImageHeader.PixelsPerLine);
-	case eLinesPerElement:
+	case eLinesPerImageElement:
 		return(m_dpx_header.ImageHeader.LinesPerElement);
 	case eXOffset:
 		return(m_dpx_header.SourceInfoHeader.XOffset);
@@ -1021,11 +1278,11 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 field) const
 		return(m_dpx_header.SourceInfoHeader.XOriginalSize);
 	case eYOriginalSize:
 		return(m_dpx_header.SourceInfoHeader.YOriginalSize);
-	case eAspectRatioH:
+	case ePixelAspectRatioH:
 		return(m_dpx_header.SourceInfoHeader.AspectRatio[0]);
-	case eAspectRatioV:
+	case ePixelAspectRatioV:
 		return(m_dpx_header.SourceInfoHeader.AspectRatio[1]);
-	case eFramePosition:
+	case eFramePositionInSequence:
 		return(m_dpx_header.FilmHeader.FramePosition);
 	case eSequenceLength:
 		return(m_dpx_header.FilmHeader.SequenceLen);
@@ -1039,21 +1296,26 @@ uint32_t HdrDpxFile::GetHeader(HdrDpxFieldsU32 field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsU16 field, uint16_t value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	switch (field)
 	{
-	case eNumberElements:
+	case eNumberOfImageElements:
 		m_dpx_header.ImageHeader.NumberElements = value;
 		break;
-	case eBorderXL:
+	case eBorderValidityXL:
 		m_dpx_header.SourceInfoHeader.Border[0] = value;
 		break;
-	case eBorderXR:
+	case eBorderValidityXR:
 		m_dpx_header.SourceInfoHeader.Border[1] = value;
 		break;
-	case eBorderYT:
+	case eBorderValidityYT:
 		m_dpx_header.SourceInfoHeader.Border[2] = value;
 		break;
-	case eBorderYB:
+	case eBorderValidityYB:
 		m_dpx_header.SourceInfoHeader.Border[3] = value;
 	}
 }
@@ -1062,15 +1324,15 @@ uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 field) const
 {
 	switch (field)
 	{
-	case eNumberElements:
+	case eNumberOfImageElements:
 		return(m_dpx_header.ImageHeader.NumberElements);
-	case eBorderXL:
+	case eBorderValidityXL:
 		return(m_dpx_header.SourceInfoHeader.Border[0]);
-	case eBorderXR:
+	case eBorderValidityXR:
 		return(m_dpx_header.SourceInfoHeader.Border[1]);
-	case eBorderYT:
+	case eBorderValidityYT:
 		return(m_dpx_header.SourceInfoHeader.Border[2]);
-	case eBorderYB:
+	case eBorderValidityYB:
 		return(m_dpx_header.SourceInfoHeader.Border[3]);
 	}
 	return 0;
@@ -1078,6 +1340,11 @@ uint16_t HdrDpxFile::GetHeader(HdrDpxFieldsU16 field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsR32 field, float value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	switch (field)
 	{
 	case eXCenter:
@@ -1086,28 +1353,34 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsR32 field, float value)
 	case eYCenter:
 		m_dpx_header.SourceInfoHeader.YCenter = value;
 		break;
-	case eFilmFrameRate:
+	case eXScannedSize:
+		m_dpx_header.SourceInfoHeader.XScannedSize = value;
+		break;
+	case eYScannedSize:
+		m_dpx_header.SourceInfoHeader.YScannedSize = value;
+		break;
+	case eFrameRateOfOriginal:
 		m_dpx_header.FilmHeader.FrameRate = value;
 		break;
-	case eShutterAngle:
+	case eShutterAngleInDegrees:
 		m_dpx_header.FilmHeader.ShutterAngle = value;
 		break;
-	case eHorzSampleRate:
+	case eHorizontalSamplingRate:
 		m_dpx_header.TvHeader.HorzSampleRate = value;
 		break;
-	case eVertSampleRate:
+	case eVerticalSamplingRate:
 		m_dpx_header.TvHeader.VertSampleRate = value;
 		break;
-	case eTvFrameRate:
+	case eTemporalSamplingRate:
 		m_dpx_header.TvHeader.FrameRate = value;
 		break;
-	case eTimeOffset:
+	case eTimeOffsetFromSyncToFirstPixel:
 		m_dpx_header.TvHeader.TimeOffset = value;
 		break;
 	case eGamma:
 		m_dpx_header.TvHeader.Gamma = value;
 		break;
-	case eBlackLevel:
+	case eBlackLevelCode:
 		m_dpx_header.TvHeader.BlackLevel = value;
 		break;
 	case eBlackGain:
@@ -1116,10 +1389,10 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsR32 field, float value)
 	case eBreakpoint:
 		m_dpx_header.TvHeader.Breakpoint = value;
 		break;
-	case eWhiteLevel:
+	case eReferenceWhiteLevelCode:
 		m_dpx_header.TvHeader.WhiteLevel = value;
 		break;
-	case eIntegrationTimes:
+	case eIntegrationTime:
 		m_dpx_header.TvHeader.IntegrationTimes = value;
 	}
 }
@@ -1132,29 +1405,33 @@ float HdrDpxFile::GetHeader(HdrDpxFieldsR32 field) const
 		return(m_dpx_header.SourceInfoHeader.XCenter);
 	case eYCenter:
 		return(m_dpx_header.SourceInfoHeader.YCenter);
-	case eFilmFrameRate:
+	case eXScannedSize:
+		return(m_dpx_header.SourceInfoHeader.XScannedSize);
+	case eYScannedSize:
+		return(m_dpx_header.SourceInfoHeader.YScannedSize);
+	case eFrameRateOfOriginal:
 		return(m_dpx_header.FilmHeader.FrameRate);
-	case eShutterAngle:
+	case eShutterAngleInDegrees:
 		return(m_dpx_header.FilmHeader.ShutterAngle);
-	case eHorzSampleRate:
+	case eHorizontalSamplingRate:
 		return(m_dpx_header.TvHeader.HorzSampleRate);
-	case eVertSampleRate:
+	case eVerticalSamplingRate:
 		return(m_dpx_header.TvHeader.VertSampleRate);
-	case eTvFrameRate:
+	case eTemporalSamplingRate:
 		return(m_dpx_header.TvHeader.FrameRate);
-	case eTimeOffset:
+	case eTimeOffsetFromSyncToFirstPixel:
 		return(m_dpx_header.TvHeader.TimeOffset);
 	case eGamma:
 		return(m_dpx_header.TvHeader.Gamma);
-	case eBlackLevel:
+	case eBlackLevelCode:
 		return(m_dpx_header.TvHeader.BlackLevel);
 	case eBlackGain:
 		return(m_dpx_header.TvHeader.BlackGain);
 	case eBreakpoint:
 		return(m_dpx_header.TvHeader.Breakpoint);
-	case eWhiteLevel:
+	case eReferenceWhiteLevelCode:
 		return(m_dpx_header.TvHeader.WhiteLevel);
-	case eIntegrationTimes:
+	case eIntegrationTime:
 		return(m_dpx_header.TvHeader.IntegrationTimes);
 	}
 	return 0.0;
@@ -1162,10 +1439,17 @@ float HdrDpxFile::GetHeader(HdrDpxFieldsR32 field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsU8 field, uint8_t value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	switch (field)
 	{
 	case eFieldNumber:
 		m_dpx_header.TvHeader.FieldNumber = value;
+	case eSMPTETCDBB2Value:
+		m_dpx_header.TvHeader.SMPTETCDBB2 = value;
 	}
 }
 
@@ -1175,12 +1459,19 @@ uint8_t HdrDpxFile::GetHeader(HdrDpxFieldsU8 field) const
 	{
 	case eFieldNumber:
 		return(m_dpx_header.TvHeader.FieldNumber);
+	case eSMPTETCDBB2Value:
+		return(m_dpx_header.TvHeader.SMPTETCDBB2);
 	}
 	return 0;
 }
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsDittoKey field, HdrDpxDittoKey value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.FileHeader.DittoKey = static_cast<uint32_t>(value);
 }
 
@@ -1191,6 +1482,11 @@ HdrDpxDittoKey HdrDpxFile::GetHeader(HdrDpxFieldsDittoKey field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsDatumMappingDirection field, HdrDpxDatumMappingDirection value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.FileHeader.DatumMappingDirection = static_cast<uint8_t>(value);
 }
 
@@ -1201,6 +1497,11 @@ HdrDpxDatumMappingDirection HdrDpxFile::GetHeader(HdrDpxFieldsDatumMappingDirect
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsOrientation field, HdrDpxOrientation value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.ImageHeader.Orientation = static_cast<uint16_t>(value);
 }
 
@@ -1209,8 +1510,77 @@ HdrDpxOrientation HdrDpxFile::GetHeader(HdrDpxFieldsOrientation field) const
 	return static_cast<HdrDpxOrientation>(m_dpx_header.ImageHeader.Orientation);
 }
 
+void HdrDpxFile::SetHeader(HdrDpxFieldsTimeCode field, SMPTETimeCode value)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	m_dpx_header.TvHeader.TimeCode = (value.h_tens << 28) |
+									 (value.h_units << 24) |
+									 (value.m_tens << 20) |
+		                             (value.m_units << 16) |
+		                             (value.s_tens << 12) |
+		                             (value.s_units << 8) |
+		                             (value.F_tens << 4) |
+		                             value.F_units;
+}
+
+SMPTETimeCode HdrDpxFile::GetHeader(HdrDpxFieldsTimeCode field) const
+{
+	SMPTETimeCode ret;
+	ret.h_tens = m_dpx_header.TvHeader.TimeCode >> 28;
+	ret.h_units = (m_dpx_header.TvHeader.TimeCode >> 24) & 0xf;
+	ret.m_tens = (m_dpx_header.TvHeader.TimeCode >> 20) & 0xf;
+	ret.m_units = (m_dpx_header.TvHeader.TimeCode >> 16) & 0xf;
+	ret.s_tens = (m_dpx_header.TvHeader.TimeCode >> 12) & 0xf;
+	ret.s_units = (m_dpx_header.TvHeader.TimeCode >> 8) & 0xf;
+	ret.F_tens = (m_dpx_header.TvHeader.TimeCode >> 4) & 0xf;
+	ret.F_units = m_dpx_header.TvHeader.TimeCode & 0xf;
+	return ret;
+}
+
+void HdrDpxFile::SetHeader(HdrDpxFieldsUserBits field, SMPTEUserBits value)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	m_dpx_header.TvHeader.UserBits = (value.UB8 << 28) |
+									 (value.UB7 << 24) |
+									 (value.UB6 << 20) |
+									 (value.UB5 << 16) |
+									 (value.UB4 << 12) |
+									 (value.UB3 << 8) |
+									 (value.UB2 << 4) |
+									 value.UB1;
+}
+
+SMPTEUserBits HdrDpxFile::GetHeader(HdrDpxFieldsUserBits field) const
+{
+	SMPTEUserBits ret;
+
+	ret.UB8 = m_dpx_header.TvHeader.UserBits >> 28;
+	ret.UB7 = (m_dpx_header.TvHeader.UserBits >> 24) & 0xf;
+	ret.UB6 = (m_dpx_header.TvHeader.UserBits >> 20) & 0xf;
+	ret.UB5 = (m_dpx_header.TvHeader.UserBits >> 16) & 0xf;
+	ret.UB4 = (m_dpx_header.TvHeader.UserBits >> 12) & 0xf;
+	ret.UB3 = (m_dpx_header.TvHeader.UserBits >> 8) & 0xf;
+	ret.UB2 = (m_dpx_header.TvHeader.UserBits >> 4) & 0xf;
+	ret.UB1 = m_dpx_header.TvHeader.UserBits & 0xf;
+	return ret;
+}
+
+
 void HdrDpxFile::SetHeader(HdrDpxFieldsInterlace field, HdrDpxInterlace value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.TvHeader.Interlace = static_cast<uint8_t>(value);
 }
 
@@ -1221,6 +1591,11 @@ HdrDpxInterlace HdrDpxFile::GetHeader(HdrDpxFieldsInterlace field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsVideoSignal field, HdrDpxVideoSignal value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.TvHeader.VideoSignal = static_cast<uint8_t>(value);
 }
 
@@ -1231,6 +1606,11 @@ HdrDpxVideoSignal HdrDpxFile::GetHeader(HdrDpxFieldsVideoSignal field) const
 
 void HdrDpxFile::SetHeader(HdrDpxFieldsVideoIdentificationCode field, HdrDpxVideoIdentificationCode value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_dpx_header.TvHeader.VideoIdentificationCode = static_cast<uint8_t>(value);
 }
 
@@ -1239,8 +1619,29 @@ HdrDpxVideoIdentificationCode HdrDpxFile::GetHeader(HdrDpxFieldsVideoIdentificat
 	return static_cast<HdrDpxVideoIdentificationCode>(m_dpx_header.TvHeader.VideoIdentificationCode);
 }
 
+void HdrDpxFile::SetHeader(HdrDpxFieldsSMPTETCType field, HdrDpxSMPTETCType value)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	m_dpx_header.TvHeader.SMPTETCType = static_cast<uint8_t>(value);
+}
+
+HdrDpxSMPTETCType HdrDpxFile::GetHeader(HdrDpxFieldsSMPTETCType field) const
+{
+	return static_cast<HdrDpxSMPTETCType>(m_dpx_header.TvHeader.SMPTETCType);
+}
+
+
 void HdrDpxFile::SetHeader(HdrDpxFieldsByteOrder field, HdrDpxByteOrder value)
 {
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
 	m_byteorder = value;
 }
 

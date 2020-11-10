@@ -336,7 +336,7 @@ int main(int argc, char *argv[])
 		datum_row_out.resize(dl_dest.size() * f_in.GetHeader(Dpx::ePixelsPerLine));
 		maxval = (1 << static_cast<uint8_t>(ie_out->GetHeader(Dpx::eBitDepth))) - 1;
 
-		for(uint32_t row = 0; row < f_in.GetHeader(Dpx::eLinesPerElement); ++row)
+		for(uint32_t row = 0; row < f_in.GetHeader(Dpx::eLinesPerImageElement); ++row)
 		{
 			bool row_read[8] = {
 				false, false, false, false, false, false, false, false
