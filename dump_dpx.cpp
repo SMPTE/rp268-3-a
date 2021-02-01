@@ -418,6 +418,7 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 	}
 }
 
+int datacount;
 void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool is_signed, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
 {
 	if (bit_depth_conv == 0)
@@ -448,7 +449,7 @@ void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
 		raw_fp->write((char *)&outrow, sizeof(uint8_t));
 	}
-
+	datacount++;
 
 }
 
@@ -474,7 +475,7 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 				alt_chroma = static_cast<uint8_t>(fp_list.size());
 			new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
 			std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(c, 0));
-			new_fp->open(rawfilename, ios::out & ios::binary);
+			new_fp->open(rawfilename, ios::out | ios::binary);
 			fp_list.push_back(new_fp);
 			if (c == Dpx::DATUM_Y)
 				first_y_fp = new_fp;
@@ -487,7 +488,7 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 	{
 		new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
 		std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(Dpx::DATUM_C, 1));
-		new_fp->open(rawfilename, ios::out & ios::binary);
+		new_fp->open(rawfilename, ios::out | ios::binary);
 		fp_list.push_back(new_fp);
 	}
 }
@@ -684,6 +685,7 @@ int main(int argc, char *argv[])
 			}
 			for (auto fp : raw_fp_list)
 			{
+				cout << fp->tellp() << "\n";
 				fp->close();
 			}
 		}

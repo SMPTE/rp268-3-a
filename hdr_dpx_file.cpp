@@ -48,13 +48,13 @@
                << ", line " << __LINE__ << "." \
                << std::endl << msg << std::endl, abort(), 0) : 1
 #endif
-#define LOG_ERROR(number, severity, msg) \
-	m_err.LogError(number, severity, ((severity == eInformational) ? "INFO #" : ((severity == eWarning) ? "WARNING #" : "ERROR #")) \
+#define LOG_ERROR(number, severity, msg)  \
+	    m_err.LogError(number, severity, ((severity == eInformational) ? "INFO #" : ((severity == eWarning) ? "WARNING #" : "ERROR #")) \
 			   + std::to_string(static_cast<int>(number)) + " in " \
                + "function " + __FUNCTION__ \
                + ", file " + __FILE__ \
                + ", line " + std::to_string(__LINE__) + ":\n" \
-               + msg + "\n");
+               + msg + "\n")
 
 
 using namespace Dpx;
@@ -762,7 +762,7 @@ static bool IsStringAllFs(std::string s, const int max_size)
 	if (s.length() < max_size)
 		return false;
 	for (int i = 0; i < max_size; ++i)
-		if (s[i] != 255)
+		if (s[i] != (char)-1)
 			return false;
 	return true;
 }
@@ -791,25 +791,36 @@ static bool ValidateTimeDate(std::string s, std::string &errmsg)
 	}
 	if (!isdigit(s[8] || !isdigit(s[9])))
 		errmsg += "dd field is not numeric; ";
-	day = std::stoi(s.substr(8, 2));
-	if (day < 1 || day > days_in_month[month - 1])
-		errmsg += "dd field is not valid; ";
+	else
+	{
+		day = std::stoi(s.substr(8, 2));
+		if (day < 1 || day > days_in_month[month - 1])
+			errmsg += "dd field is not valid; ";
+	}
 	if (!isdigit(s[11]) || !isdigit(s[12]))
 		errmsg += "hh field is not numeric; ";
-	hour = std::stoi(s.substr(11, 2));
-	if (hour > 23)
-		errmsg += "hh field is > 23; ";
+	else
+	{
+		hour = std::stoi(s.substr(11, 2));
+		if (hour > 23)
+			errmsg += "hh field is > 23; ";
+	}
 	if (!isdigit(s[14]) || !isdigit(s[15]))
 		errmsg += "mm field is not numeric; ";
-	minute = std::stoi(s.substr(14, 2));
-	if (minute > 60)
-		errmsg += "mm field is > 60";
+	else
+	{
+		minute = std::stoi(s.substr(14, 2));
+		if (minute > 60)
+			errmsg += "mm field is > 60";
+	}
 	if (!isdigit(s[17]) || !isdigit(s[18]))
 		errmsg += "ss field is not numeric; ";
-	second = std::stoi(s.substr(14, 2));
-	if (second > 60)
-		errmsg += "ss field is > 60";
-
+	else
+	{
+		second = std::stoi(s.substr(14, 2));
+		if (second > 60)
+			errmsg += "ss field is > 60";
+	}
 	return (errmsg.length() > 0);
 }
 
@@ -830,7 +841,7 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "File name field is all 0xff bytes; undefined strings should use single null character");
 	if (IsStringAllFs(GetHeader(eCreationDateTime), 24))
 		LOG_ERROR(eValidationError, eWarning, "Time & date field is all 0xff bytes; undefined strings should use single null character");
-	if (ValidateTimeDate(GetHeader(eCreationDateTime), errmsg))
+	else if (ValidateTimeDate(GetHeader(eCreationDateTime), errmsg))
 		LOG_ERROR(eValidationError, eWarning, "Creator time and date field not properly constructed: " + errmsg);
 	if (IsStringAllFs(GetHeader(eCreator), 100))
 		LOG_ERROR(eValidationError, eWarning, "Creator field is all 0xff bytes; undefined strings should use single null character");
@@ -844,7 +855,7 @@ bool HdrDpxFile::Validate()
 
 	if(GetHeader(eOrientation) > eOrientationB2T_R2L && GetHeader(eOrientation) != eOrientationUndefined)
 		LOG_ERROR(eValidationError, eWarning, "Orientation field has invalid value");
-	if (GetHeader(eOrientation) != eOrientationT2B_L2R)
+	if (GetHeader(eOrientation) != eOrientationL2R_T2B)
 		LOG_ERROR(eValidationError, eWarning, "Some readers might not interpret a non-core Orientation field value");
 	if(GetHeader(eNumberOfImageElements) < 1 || GetHeader(eNumberOfImageElements) > 8)
 		LOG_ERROR(eValidationError, eWarning, "Number of image elements field has invalid value");
@@ -853,7 +864,7 @@ bool HdrDpxFile::Validate()
 	if(GetHeader(eLinesPerImageElement) == 0)
 		LOG_ERROR(eValidationError, eWarning, "Lines per image element field is equal to 0");
 
-	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (auto ie_idx : GetIEIndexList() )
 	{
 		float range_lo, range_hi;
 		if (m_IE[ie_idx].GetHeader(eOffsetToData) == UINT32_MAX)   // indicates the IE is not present
@@ -902,9 +913,9 @@ bool HdrDpxFile::Validate()
 			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescCbYCrY && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCYAYA) &&
 			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescGeneric2 && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescGeneric8))
 			LOG_ERROR(eValidationError, eFatal, "Descriptor core field is invalid\n");
-		if (!(m_IE[ie_idx].GetHeader(eTransferCharacteristic) > eTransferIEC_61966_2_1))
+		if (m_IE[ie_idx].GetHeader(eTransferCharacteristic) > eTransferIEC_61966_2_1)
 			LOG_ERROR(eValidationError, eWarning, "Transfer Characteristic core field is invalid\n");
-		if (!(m_IE[ie_idx].GetHeader(eColorimetricSpecification) > eColorimetricST_2065_1_ACES))
+		if (m_IE[ie_idx].GetHeader(eColorimetricSpecification) > eColorimetricST_2065_1_ACES)
 			LOG_ERROR(eValidationError, eWarning, "Colormetric Specification core field is invalid\n");
 		if (m_IE[ie_idx].GetHeader(eBitDepth) == eBitDepth10 || m_IE[ie_idx].GetHeader(eBitDepth) == eBitDepth12)
 		{
@@ -935,7 +946,7 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Source filename field is all 0xff bytes; undefined strings should use single null character");
 	if (IsStringAllFs(GetHeader(eSourceImageDateTime), 24))
 		LOG_ERROR(eValidationError, eWarning, "Source time & date field is all 0xff bytes; undefined strings should use single null character");
-	if (ValidateTimeDate(GetHeader(eSourceImageDateTime), errmsg))
+	else if (ValidateTimeDate(GetHeader(eSourceImageDateTime), errmsg))
 		LOG_ERROR(eValidationError, eWarning, "Source time and date field not properly constructed: " + errmsg);
 	if (IsStringAllFs(GetHeader(eInputDeviceName), 32))
 		LOG_ERROR(eValidationError, eWarning, "Input device name field is all 0xff bytes; undefined strings should use single null character");
@@ -998,8 +1009,9 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Video identification code (VIC) field has unrecognized value");
 
 	
-	if (m_filemap.CheckCollisions())
-		LOG_ERROR(eValidationError, eWarning, "Image map has potentially overlapping regions");
+	//if (m_filemap.CheckCollisions())
+	//	LOG_ERROR(eValidationError, eWarning, "Image map has potentially overlapping regions");
+	ComputeOffsets();   // Checks file map
 
 	// Do we need any other validation warnings/info?
 
