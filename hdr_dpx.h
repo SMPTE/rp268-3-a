@@ -1065,6 +1065,9 @@ namespace Dpx {
 		void ComputeOffsets();
 		void FillCoreFields();
 
+		void ReadUserData();
+		void ReadSbmData();
+
 		std::list<std::string> m_warn_messages;
 		std::string m_file_name;
 		SMPTETimeCode m_smptetimecode;

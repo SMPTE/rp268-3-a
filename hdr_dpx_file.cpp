@@ -175,12 +175,73 @@ void HdrDpxFile::OpenForReading(std::string filename)
 		else
 			m_IE[ie_idx].m_isinitialized = false;
 	}
-	m_file_is_hdr_version = (static_cast<bool>(!strcmp(m_dpx_header.FileHeader.Version, "DPX2.0HDR")));
+	m_file_is_hdr_version = (static_cast<bool>(!strcmp(m_dpx_header.FileHeader.Version, "V2.0HDR")));
+
+	ReadUserData();
+	if (m_file_is_hdr_version)
+		ReadSbmData();
 
 	m_open_for_write = false;
 	m_open_for_read = true;
 	m_is_header_locked = true;
 }
+
+
+void HdrDpxFile::ReadUserData()
+{
+	if (m_dpx_header.FileHeader.UserSize == 0 || m_dpx_header.FileHeader.UserSize == UINT32_MAX)
+		return;   // Nothing to do, no user data
+
+	for (uint32_t i = 0; i < 32; ++i)
+		m_file_stream.get(m_dpx_userdata.UserIdentification[i]);
+
+	m_dpx_userdata.UserData.clear();
+	for (uint32_t i = 0; i < m_dpx_header.FileHeader.UserSize - 32 && !m_file_stream.bad(); ++i)
+		m_dpx_userdata.UserData.push_back(m_file_stream.get());
+
+	if (m_file_stream.bad() || m_file_stream.eof())
+	{
+		LOG_ERROR(eFileReadError, eWarning, "Error attempting to read user data\n");
+		return;
+	}
+}
+
+
+void HdrDpxFile::ReadSbmData()
+{
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UINT32_MAX)
+		return;		// Nothing to do, no standards-based metadata
+
+	m_file_stream.seekg(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_file_stream.beg);
+
+	for (uint32_t i = 0; i < 128; ++i)
+		m_file_stream.get(m_dpx_sbmdata.SbmFormatDescriptor[i]);
+
+	unsigned char sizebytes[4];
+	for (uint32_t i = 0; i < 4; ++i)
+		sizebytes[i] = static_cast<unsigned char>(m_file_stream.get());
+
+	if (m_byteorder == eLSBF)
+		m_dpx_sbmdata.SbmLength = (sizebytes[3] << 24) | (sizebytes[2] << 16) | (sizebytes[1] << 8) | sizebytes[0];
+	else
+		m_dpx_sbmdata.SbmLength = (sizebytes[0] << 24) | (sizebytes[1] << 16) | (sizebytes[2] << 8) | sizebytes[3];
+
+	if (m_file_stream.bad() || m_file_stream.eof())
+	{
+		LOG_ERROR(eFileReadError, eWarning, "Error attempting to read standards-based data\n");
+		return;
+	}
+
+	for (uint32_t i = 0; i < m_dpx_sbmdata.SbmLength; ++i)
+		m_dpx_sbmdata.SbmData.push_back(m_file_stream.get());
+
+	if (m_file_stream.bad() || m_file_stream.eof())
+	{
+		LOG_ERROR(eFileReadError, eWarning, "Error attempting to read standards-based data\n");
+		return;
+	}
+}
+
 
 HdrDpxImageElement *HdrDpxFile::GetImageElement(uint8_t ie_idx)
 {
@@ -1186,7 +1247,7 @@ std::string HdrDpxFile::GetHeader(HdrDpxFieldsString field) const
 	case eSBMetadata:
 		if (!m_dpx_sbmdata.SbmData.size())
 			return "";	
-		return std::string((char *)m_dpx_sbmdata.SbmData.data());
+		return std::string((char *)m_dpx_sbmdata.SbmData.data(), m_dpx_sbmdata.SbmLength);
 	}
 	return "";
 }
