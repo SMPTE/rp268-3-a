@@ -12,11 +12,18 @@
 3. Create CMake files for each of the subdirectories
 
 
-### Make
+## Make
 
 1. Create sources.mk files for the constituents of each of the three builds
 
 2. Create common make file targets and defines
 
 Are manually generated make files needed? CMake can generate them.
+
+
+## Logbook
+
+### 2020-08-20
+
+Got `generate_color_test_pattern` to build by changing the tool chain from Clang to gcc-10.
 
