@@ -580,11 +580,10 @@ int main(int argc, char *argv[])
 	if (f.GetUserData(userid, userdata))
 	{
 
-		std::cout << "User identification: '" << userid << "'\n";
 		std::cout << "User data (hex bytes):\n";
 		for (int i = 0; i < userdata.size(); ++i)
 		{
-			std::cout << tohex(userdata[i]) << " ";
+			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(userdata[i]) << " ";
 			if ((i & 0xf) == 0xf)
 				std::cout << "\n";
 		}
@@ -594,19 +593,19 @@ int main(int argc, char *argv[])
 
 	if (f.GetStandardsBasedMetadata(sbmdesc, sbmdata))
 	{
-		std::cout << "Standards-based metadata type: " << sbmdesc << "\n";
 		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
 		{
-			std::cout << "Hex bytes:\n";
+			std::cout << "ST336 (KLV) hex bytes:\n";
 			for (int i = 0; i < sbmdata.size(); ++i)
 			{
-				std::cout << tohex(sbmdata[i]) << " ";
+				std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(sbmdata[i]) << " ";
 				if ((i & 0xf) == 0xf)
 					std::cout << "\n";
 			}
 		}
 		else   // Print as string
 		{
+			std::cout << "Standards-based-metadata:\n";
 			std::cout << f.GetHeader(Dpx::eSBMetadata);
 			// Alternatively:
 			//char *c = (char *)sbmdata.data();
