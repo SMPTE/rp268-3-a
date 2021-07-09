@@ -30,9 +30,12 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 
-//! \file main.cpp  Defines the entry point for the console application.
-//
-//  These are wrapper functions for Win32 to be able to call the mainline in codec_main.c
+/** @file generate_color_test.cpp
+	@brief Defines the entry point for the generate_color_test application.
+
+	This file provides a sample application that creates ST 268-2-compliant files of color test pattern.
+	The image element structure can be specified on the command line.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,7 +54,15 @@ using namespace std;
 #ifdef _MSC_VER
 #include <tchar.h>
 
-// returns number of TCHARs in string
+
+int generate_color_test(int argc, char *argv[]);
+
+/**
+	Returns number of _TCHARs in string
+
+	@param wstr	input string
+	@return		number of _TCHARS in string
+*/
 int wstrlen(_TCHAR * wstr)
 {
     int l_idx = 0;
@@ -60,7 +71,12 @@ int wstrlen(_TCHAR * wstr)
 }
 
   
-// Allocate char string and copy TCHAR->char->string
+/**
+	Allocate char string and copy _TCHAR->char->string
+
+	@param wSrc input string
+	@return		pointer to new char * string containing copy of input string
+*/
 char * wstrdup(_TCHAR * wSrc)
 {
     int l_idx=0;
@@ -78,8 +94,13 @@ char * wstrdup(_TCHAR * wSrc)
  
   
  
-// allocate argn structure parallel to argv
-// argn must be released
+/**
+	Allocate argn structure parallel to argv. argn must be released.
+
+	@param argc	number of arguments
+	@param argv	arguments as _TCHAR strings
+	@return		pointer to array of arguments as char strings
+*/
 char ** allocate_argn (int argc, _TCHAR* argv[])
 {
     char ** l_argn = (char **)malloc(argc * sizeof(char*));
@@ -90,7 +111,13 @@ char ** allocate_argn (int argc, _TCHAR* argv[])
     return l_argn;
 }
  
-// release argn and its content
+
+/**
+	Release argn and its allocated memory
+
+	@param argc number of arguments
+	@param nargv	pointer to array of arguments as char strings
+*/
 void release_argn(int argc, char ** nargv)
 {
     for (int idx=0; idx<argc; idx++) {
@@ -99,8 +126,14 @@ void release_argn(int argc, char ** nargv)
     free(nargv);
 }
 
-int generate_color_test(int argc, char *argv[]);
 
+/**
+	Entry point for Windows console app
+
+	@param argc	number of arguments
+	@param argv array of arguments (as _TCHAR strings)
+	@return		exit code
+*/
 int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
@@ -112,6 +145,13 @@ int _tmain(int argc, _TCHAR* argv[])
 }
 #endif
 
+
+/**
+	Prints to cerr a specified message along with the error log from the DPX file
+
+	@param logmessage	Message to include with the error log
+	@param f			HdrDpxFile associated with DPX file
+*/
 static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
 	Dpx::ErrorCode code;
@@ -127,53 +167,63 @@ static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 	}
 }
 
-
-
-
-// Simple implementation of abstract class approximating a SMPTE UHD color bar pattern
+/** List of colors that are represented in the pattern */
 enum bar_colors_e {
-	WHITE_75,
-	YELLOW_75,
-	CYAN_75,
-	GREEN_75,
-	MAGENTA_75,
-	RED_75,
-	BLUE_75,
-	GRAY_40,
-	CYAN_100,
-	BLUE_100,
-	WHITE_100,
-	YELLOW_100,
-	BLACK_0,
-	RED_100,
-	GRAY_15,
-	BLACK_M2P,
-	BLACK_P2P,
-	BLACK_P4P,
-	RAMP,
-	COLOR_MAX
+	WHITE_75,    ///< 75% white
+	YELLOW_75,   ///< 75% yellow
+	CYAN_75,     ///< 75% cyan
+	GREEN_75,    ///< 75% green
+	MAGENTA_75,  ///< 75% magenta
+	RED_75,      ///< 75% red
+	BLUE_75,     ///< 75% blue
+	GRAY_40,     ///< 40% gray
+	CYAN_100,    ///< 100% cyan
+	BLUE_100,    ///< 100% blue
+	WHITE_100,   ///< 100% white
+	YELLOW_100,  ///< 100% yellow
+	BLACK_0,     ///< 0% black
+	RED_100,     ///< 100% red
+	GRAY_15,     ///< 15% gray
+	BLACK_M2P,	 ///< -2% black
+	BLACK_P2P,   ///< 2% black
+	BLACK_P4P,   ///< 4% black
+	RAMP,        ///< luma ramp
+	COLOR_MAX    ///< Do not use
 };
+
+/** YCbCr or RGB selection */
 enum comp_type_e {
-	CT_YCBCR,
-	CT_RGB		// Not supported at this time
+	CT_YCBCR,    ///< Use YCbCr components
+	CT_RGB		///< Use RGB components
 };
+
+/** Transfer function options */
 enum tf_type_e {
-	TF_SDR = 0,
-	TF_PQ = 1,
-	TF_HLG = 2
+	TF_SDR = 0,   ///< Use SDR transfer function
+	TF_PQ = 1,    ///< Use PQ transfer function
+	TF_HLG = 2   ///< Use HLG transfer function
 };
+
+/** structure to represent a rectangle of a specific color */
 typedef struct rect_s
 {
-	uint32_t tl_x;
-	uint32_t tl_y;
-	uint32_t br_x;
-	uint32_t br_y;
-	bar_colors_e color;
+	uint32_t tl_x;   ///< Top-left corner x coordinate
+	uint32_t tl_y;   ///< Top-left corner y coordinate
+	uint32_t br_x;   ///< Bottom-right corner x coordinate
+	uint32_t br_y;   ///< Bottom-right corner y coordinate
+	bar_colors_e color;  ///< color
 } rect_t;
+
+/** Simple implementation of abstract class approximating a SMPTE UHD color bar pattern */
 class CBColor
 {
 public:
 	CBColor() { }
+	/** Constructor 
+		@param bpc				Component bit depth
+		@param comptype			Whether to use YCbCr or RGB
+		@param tftype			Transfer function
+		@param usefullrange		true => use full range components, false => use limited range components */
 	CBColor(uint8_t bpc, comp_type_e comptype, tf_type_e tftype, bool usefullrange)
 	{
 		m_ct = comptype;
@@ -437,6 +487,10 @@ public:
 			std::cerr << "CBColor: unsupported bit depth\n";
 		}
 	}
+	/** Get the component values for a pixel of specified color 
+		@param[in] color				which color 
+		@param[out] d					pointer to array for storing the 3 component values for the pixel
+		@param[in] frac					for ramps, specifies the luminance fraction for the current position (from 0-1.0) */
 	void GetComponents(bar_colors_e color, int32_t *d, float frac)
 	{
 		if (color == RAMP)
@@ -456,24 +510,36 @@ public:
 		else
 			memcpy(d, m_colors[static_cast<int>(color)], sizeof(int32_t) * 3);
 	}
-	bool m_isvalid = false;
+	bool m_isvalid = false;  ///< Flag indicating whether configuration is valid
 private:
+	/** Adds a mapping from a color to a set of 3 components 
+		@param c					which color
+		@param c1					first component value
+		@param c2					second component value
+		@param c3					third component value */
 	void AddColor(bar_colors_e c, int32_t c1, int32_t c2, int32_t c3)
 	{
 		m_colors[c][0] = c1;
 		m_colors[c][1] = c2;
 		m_colors[c][2] = c3;
 	}
-	int32_t m_colors[COLOR_MAX][3];
-	comp_type_e m_ct;
-	int32_t m_offset;
-	int32_t m_range;
-	int32_t m_mid;
+	int32_t m_colors[COLOR_MAX][3];  ///< Table of colors
+	comp_type_e m_ct;   ///< component type
+	int32_t m_offset;    ///< black level
+	int32_t m_range;    ///< Range of values
+	int32_t m_mid;     ///< midpoint of code values
 };
 
+/** Tracks a list of non-overlapping rectangles, returns the color of the rectangle at a specific x,y value */
 class CBRectangleList
 {
 public:
+	/** Add a rectangle to the list
+		@param c					color of rectangle
+		@param tl_x					top-left corner x coordinate
+		@param tl_y					top-left corner y coordinate
+		@param br_x					bottom-right corner x coordinate
+		@param br_y					bottom-right corner y coordinate */
 	void AddRectangle(bar_colors_e c, uint32_t tl_x, uint32_t tl_y, uint32_t br_x, uint32_t br_y)
 	{
 		rect_t r;
@@ -484,6 +550,9 @@ public:
 		r.color = c;
 		m_rect.push_back(r);
 	}
+	/** Get a color at a specific x,y location
+		@param x					x coordinate
+		@param y					y coordinate */
 	bar_colors_e GetColor(uint32_t x, uint32_t y)
 	{
 		for (rect_t r : m_rect)
@@ -494,15 +563,21 @@ public:
 		return COLOR_MAX;
 	}
 private:
-	std::vector<rect_t> m_rect;
+	std::vector<rect_t> m_rect;  ///< list of rectangles
 };
 
+/** Round the parameter to the nearest U32 value */
 #define ROUND_U32(a) ((uint32_t)(a+0.5))
+/** Macro to simplify range comparisons */
 #define RECTANGLE_WIDTH(c,w) rx = lx + w; if(x < rx) return c; lx = rx;
+/** Color test patter generator */
 class ColorBarGenerator
 {
 public:
 	ColorBarGenerator() { }
+	/** Constructor 
+		@param w				raster width
+		@param h				raster height */
 	ColorBarGenerator(uint32_t w, uint32_t h)
 	{
 		m_a = w;
@@ -511,6 +586,10 @@ public:
 		m_c = ROUND_U32(4 * m_b / 3 / 7);
 		m_d = ROUND_U32((m_a - 7 * m_c) / 2);
 	}
+	/** Retrieve the color of a specific pixel 
+		@param x				x coordinate
+		@param y				y coordinate
+		@return					pixel color */
 	bar_colors_e GetPixelColor(uint32_t x, uint32_t y)
 	{
 		uint32_t lx, rx;
@@ -567,24 +646,30 @@ public:
 			return GRAY_15;
 		}
 	}
-	float m_ramp_frac;
+	float m_ramp_frac;   ///< Fraction for ramp
 
 private:
-	uint32_t m_a, m_b, m_c, m_d;
+	uint32_t m_a, m_b, m_c, m_d; ///< a, b, c, d values in test pattern
 };
 
+/** Image element descriptor data structure */
 class IEDescriptor
 {
 public:
-	uint8_t descriptor;
-	bool h_subs = false;
-	bool v_subs = false;
+	uint8_t descriptor;   ///< descriptor value
+	bool h_subs = false;	///< If true, chroma is horizontally subsampled
+	bool v_subs = false;	///< If true, chroma is vertically subsampled
 };
 
+/** Image element mapper */
 class IEMapper
 {
 public:
 	IEMapper() { }
+	/** Constructor
+		@param corder					Component order (as a string)
+		@param chroma					Chroma type (444 => 4:4:4, 422 => 4:2:2, 420 => 4:2:0)
+		@param planar					If true, write samples using individual planes rather than interleaved */
 	IEMapper(std::string corder, int chroma, bool planar)
 	{
 		IEDescriptor desc;
@@ -698,18 +783,26 @@ public:
 			m_desc_list.push_back(desc);
 		}
 	}
+	/** Get the number of image elements to map to
+		@return						Number of IEs to use */
 	uint8_t GetNumberOfIEs()
 	{
 		return static_cast<uint8_t>(m_desc_list.size());
 	}
+	/** Get the descriptor to use for a specific image elemment 
+		@param idx					Image element index
+		@return						Descriptor data structure */
 	IEDescriptor GetDescriptor(int idx)
 	{
 		return m_desc_list[idx];
 	}
 
 private:
-	std::vector<IEDescriptor> m_desc_list;
-	std::vector<Dpx::DatumLabel> GetLabelsFromString(std::string s)
+	std::vector<IEDescriptor> m_desc_list;    ///< Descriptor for each IE
+	/** Get a list of datum labels based on an input string 
+		@param s					String with a componenet list (e.g., "RGB")
+		@return						List of datum labels the correspond with component list */
+	std::vector<Dpx::DatumLabel> GetLabelsFromString(std::string s)   
 	{
 		std::string subs = s;
 		std::vector<Dpx::DatumLabel> ret;
@@ -775,7 +868,7 @@ private:
 };
 
 
-// Desc types:
+// Permitted descriptor strings:
 //   CbYCr
 //   CbYCrA
 //   CbYCrY422
@@ -794,6 +887,9 @@ private:
 //   ABGR
 
 // Example calling sequence for HDR DPX write (single image element case):
+/** Main program 
+	@param argc				Number of arguments
+	@param argv				Arguments */
 #ifdef _MSC_VER
 int generate_color_test(int argc, char *argv[])
 #else
@@ -820,6 +916,26 @@ int main(int argc, char *argv[])
 	{
 		std::cerr << "Expected even number of command line parameters\n";
 		return 1;
+	}
+
+	if (argc == 1)
+	{
+		std::cout << "Usage: " << argv[0];
+		std::cout << " -o <outfilename>";
+		std::cout << " -tf <BT709|HLG|PQ>";
+		std::cout << " -corder <corder>";
+		std::cout << " -userfr <1|0>";
+		std::cout << " -bpc <8|10|12>";
+		std::cout << " -planar <1|0>";
+		std::cout << " -chroma <444|422|420>";
+		std::cout << " -w <width>";
+		std::cout << " -h <height>";
+		std::cout << " -dmd <l2r|r2l>";
+		std::cout << " -order <msbf|lsbf>";
+		std::cout << " -packing <packed|ma|mb>";
+		std::cout << " -encoding <1|0>\n";
+		std::cout << "\n\nSupported list of formats:  CbYCr, CbYCrA, CbYCrY422, CbYACrYA422, YCbCr422p, YCbCrA422p, CYY420, CYAYA420, YCbCr420p, YCbCrA420p, BGR, BGRA, ARGB, RGB, RGBA, ABGR\n";
+		return 0;
 	}
 
 	// Note that command-line argument error checking is absent

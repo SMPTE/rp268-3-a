@@ -167,7 +167,7 @@ void HdrDpxFile::OpenForReading(std::string filename)
 	// Read any present image elements
 	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
-		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset != UINT32_MAX)
+		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset != UNDEFINED_U32)
 		{
 			m_IE[ie_idx].Initialize(ie_idx, &m_file_stream, &m_dpx_header, &m_filemap);
 			m_IE[ie_idx].OpenForReading(swapped);
@@ -189,7 +189,7 @@ void HdrDpxFile::OpenForReading(std::string filename)
 
 void HdrDpxFile::ReadUserData()
 {
-	if (m_dpx_header.FileHeader.UserSize == 0 || m_dpx_header.FileHeader.UserSize == UINT32_MAX)
+	if (m_dpx_header.FileHeader.UserSize == 0 || m_dpx_header.FileHeader.UserSize == UNDEFINED_U32)
 		return;   // Nothing to do, no user data
 
 	for (uint32_t i = 0; i < 32; ++i)
@@ -209,7 +209,7 @@ void HdrDpxFile::ReadUserData()
 
 void HdrDpxFile::ReadSbmData()
 {
-	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UINT32_MAX)
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UNDEFINED_U32)
 		return;		// Nothing to do, no standards-based metadata
 
 	m_file_stream.seekg(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_file_stream.beg);
@@ -347,26 +347,26 @@ bool HdrDpxFile::ByteSwapToMachine(void)
 
 bool HdrDpxFile::IsHdr(void) const
 {
-	return (strcmp(m_dpx_header.FileHeader.Version, "V2.0HDR") == 0);
+	return (GetHeader(eVersion) == eDPX_2_0_HDR);
 }
 
 void HdrDpxFile::ComputeOffsets()
 {
 	uint32_t data_offset;
-	uint32_t min_offset = UINT32_MAX;
+	uint32_t min_offset = UNDEFINED_U32;
 
 	m_filemap.Reset();
 
 	// Fill in what is specified
 	m_filemap.AddRegion(0, sizeof(HDRDPXFILEFORMAT), 100);
 
-	if (m_dpx_header.FileHeader.UserSize == UINT32_MAX)   // Undefined value is not permitted in 268-2
+	if (m_dpx_header.FileHeader.UserSize == UNDEFINED_U32)   // Undefined value is not permitted in 268-2
 		m_dpx_header.FileHeader.UserSize = 0;
 
 	if (m_dpx_header.FileHeader.UserSize != 0)
 		m_filemap.AddRegion(sizeof(HDRDPXFILEFORMAT), ((sizeof(HDRDPXFILEFORMAT) + m_dpx_header.FileHeader.UserSize + 3) >> 2) << 2, 101);
 
-	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UINT32_MAX && m_dpx_header.FileHeader.StandardsBasedMetadataOffset != eSBMAutoLocate)
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UNDEFINED_U32 && m_dpx_header.FileHeader.StandardsBasedMetadataOffset != eSBMAutoLocate)
 		m_filemap.AddRegion(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_dpx_header.FileHeader.StandardsBasedMetadataOffset + m_dpx_sbmdata.SbmLength + 132, 102);
 
 	// Add IEs with data offsets
@@ -376,7 +376,7 @@ void HdrDpxFile::ComputeOffsets()
 		{
 			m_IE[ie_idx].ComputeWidthAndHeight();
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
-			if (data_offset != UINT32_MAX)
+			if (data_offset != UNDEFINED_U32)
 			{
 				if (m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)   // RLE can theoretically use more bits than compressed
 				{
@@ -397,7 +397,7 @@ void HdrDpxFile::ComputeOffsets()
 		if (m_IE[ie_idx].m_isinitialized)
 		{
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
-			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) != eEncodingRLE)
+			if (data_offset == UNDEFINED_U32 && m_IE[ie_idx].GetHeader(eEncoding) != eEncodingRLE)
 				m_IE[ie_idx].SetHeader(eOffsetToData, m_filemap.FindEmptySpace(m_IE[ie_idx].GetImageDataSizeInBytes(), ie_idx));
 		}
 	}
@@ -409,7 +409,7 @@ void HdrDpxFile::ComputeOffsets()
 		if (m_IE[ie_idx].m_isinitialized)
 		{
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
-			if (data_offset == UINT32_MAX && m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)
+			if (data_offset == UNDEFINED_U32 && m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)
 			{
 				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].GetImageDataSizeInBytes());
 				est_size = ((est_size + 3) >> 2) << 2;  // round to dword boundary
@@ -430,7 +430,7 @@ void HdrDpxFile::ComputeOffsets()
 		if (m_IE[ie_idx].m_isinitialized && min_offset > m_IE[ie_idx].GetHeader(eOffsetToData))
 			min_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 	}
-	if (m_dpx_header.FileHeader.ImageOffset == UINT32_MAX)
+	if (m_dpx_header.FileHeader.ImageOffset == UNDEFINED_U32)
 		m_dpx_header.FileHeader.ImageOffset = min_offset;
 	if (m_dpx_header.FileHeader.ImageOffset != min_offset)
 		LOG_ERROR(eBadParameter, eWarning, "Image offset in main header does not match smallest image element offset");
@@ -439,16 +439,12 @@ void HdrDpxFile::ComputeOffsets()
 		LOG_ERROR(eBadParameter, eWarning, "Image map has potentially overlapping regions");
 }
 
-uint8_t HdrDpxFile::GetActiveIE() const
-{
-	return m_active_rle_ie;
-}
 
 void HdrDpxFile::FillCoreFields()
 {
 	int number_of_ie = 0, first_ie_idx = -1;
 
-	if (m_dpx_header.FileHeader.Magic != 0x53445058 && m_dpx_header.FileHeader.Magic != UINT32_MAX)
+	if (m_dpx_header.FileHeader.Magic != 0x53445058 && m_dpx_header.FileHeader.Magic != UNDEFINED_U32)
 	{
 		LOG_ERROR(eMissingCoreField, eWarning, "Unrecognized magic number");
 	}
@@ -475,20 +471,20 @@ void HdrDpxFile::FillCoreFields()
 	if(first_ie_idx < 0)
 		LOG_ERROR(eBadParameter, eFatal, "No initialized image elements found");
 
-	if (m_dpx_header.ImageHeader.Orientation == UINT16_MAX)
+	if (m_dpx_header.ImageHeader.Orientation == UNDEFINED_U16)
 	{
 		LOG_ERROR(eMissingCoreField, eWarning, "Image orientation not specified, assuming left-to-right, top-to-bottom");
 		m_dpx_header.ImageHeader.Orientation = 0;
 	}
-	if (m_dpx_header.ImageHeader.NumberElements == 0 || m_dpx_header.ImageHeader.NumberElements == UINT16_MAX)
+	if (m_dpx_header.ImageHeader.NumberElements == 0 || m_dpx_header.ImageHeader.NumberElements == UNDEFINED_U16)
 		m_dpx_header.ImageHeader.NumberElements = number_of_ie;
 
-	if (m_dpx_header.ImageHeader.PixelsPerLine == UINT32_MAX)
+	if (m_dpx_header.ImageHeader.PixelsPerLine == UNDEFINED_U32)
 	{
 		LOG_ERROR(eFileWriteError, eFatal, "Pixels per line must be specified");
 		return;
 	}
-	if (m_dpx_header.ImageHeader.LinesPerElement == UINT32_MAX)
+	if (m_dpx_header.ImageHeader.LinesPerElement == UNDEFINED_U32)
 	{
 		LOG_ERROR(eFileWriteError, eFatal, "Lines per element must be specified");
 		return;
@@ -553,12 +549,12 @@ void HdrDpxFile::FillCoreFields()
 			LOG_ERROR(eMissingCoreField, eWarning, "Encoding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming uncompressed");
 			m_IE[ie_idx].SetHeader(eEncoding, eEncodingNoEncoding);		// No compression (default)
 		}
-		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) == UINT32_MAX)
+		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) == UNDEFINED_U32)
 		{
 			LOG_ERROR(eMissingCoreField, eWarning, "End of line padding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming no padding");
 			m_IE[ie_idx].SetHeader(eEndOfLinePadding, 0);
 		}
-		if (m_IE[ie_idx].GetHeader(eEndOfImagePadding) == UINT32_MAX)
+		if (m_IE[ie_idx].GetHeader(eEndOfImagePadding) == UNDEFINED_U32)
 		{
 			LOG_ERROR(eMissingCoreField, eWarning, "End of image padding not specified for image element " + std::to_string(ie_idx + 1) + ", assuming no padding");
 			m_IE[ie_idx].SetHeader(eEndOfImagePadding, 0);
@@ -642,7 +638,7 @@ void HdrDpxFile::Close()
 		if ((m_byteorder == eLSBF && m_machine_is_msbf) || (m_byteorder == eMSBF && !m_machine_is_msbf))
 			ByteSwapHeader();
 
-		if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UINT32_MAX)
+		if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UNDEFINED_U32)
 		{
 			// Write standards-based metadata
 			m_file_stream.seekp(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, std::ios::beg);
@@ -682,7 +678,7 @@ static std::string u32_to_hex(uint32_t value)
 #define PRINT_FIELD_ASCII(n,v,l) if((v[0])!='\0') { char s[l+1]; s[l] = '\0'; memcpy(s, v, l); header += n + "\t" + std::string(s) + "\n";  }
 std::string HdrDpxFile::DumpHeader() const
 {
-	static const uint32_t undefined_4bytes = UINT32_MAX;  /* 4-byte block 0xffffffff used to check if floats are undefined */
+	static const uint32_t undefined_4bytes = UNDEFINED_U32;  /* 4-byte block 0xffffffff used to check if floats are undefined */
 	std::string header;
 
 	header = header + "\n\n//////////////////////////////////////////////////////////////////\n" +
@@ -802,13 +798,13 @@ std::string HdrDpxFile::DumpHeader() const
 	PRINT_FIELD_U8(std::string("SMPTE_TC_Type"), m_dpx_header.TvHeader.SMPTETCType);
 	PRINT_FIELD_U8(std::string("SMPTE_TC_DBB2"), m_dpx_header.TvHeader.SMPTETCDBB2);
 
-	if (m_dpx_header.FileHeader.UserSize > 0 && m_dpx_header.FileHeader.UserSize != UINT32_MAX)
+	if (m_dpx_header.FileHeader.UserSize > 0 && m_dpx_header.FileHeader.UserSize != UNDEFINED_U32)
 	{
 		header += "\n// User data header\n";
 		PRINT_FIELD_ASCII(std::string("User_Identification"), m_dpx_userdata.UserIdentification, 32);
 	}
 
-	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UINT32_MAX)
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UNDEFINED_U32)
 	{
 		header += "\n// Standards-based metadata header\n";
 		PRINT_FIELD_ASCII(std::string("Sbm_Descriptor"), m_dpx_sbmdata.SbmFormatDescriptor, 128);
@@ -896,7 +892,7 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Generic Size field has invalid value");
 	if(GetHeader(eIndustrySpecificHeaderLength) != 384)
 		LOG_ERROR(eValidationError, eWarning, "Industry Size field has invalid value");
-	if(GetHeader(eUserDefinedHeaderLength) == UINT32_MAX)
+	if(GetHeader(eUserDefinedHeaderLength) == UNDEFINED_U32)
 		LOG_ERROR(eValidationError, eWarning, "User Data Size field shall not be undefined");	
 	if (IsStringAllFs(GetHeader(eImageFileName), 100))
 		LOG_ERROR(eValidationError, eWarning, "File name field is all 0xff bytes; undefined strings should use single null character");
@@ -925,11 +921,13 @@ bool HdrDpxFile::Validate()
 	if(GetHeader(eLinesPerImageElement) == 0)
 		LOG_ERROR(eValidationError, eWarning, "Lines per image element field is equal to 0");
 
+	uint8_t num_ies = 0;
 	for (auto ie_idx : GetIEIndexList() )
 	{
 		float range_lo, range_hi;
-		if (m_IE[ie_idx].GetHeader(eOffsetToData) == UINT32_MAX)   // indicates the IE is not present
+		if (m_IE[ie_idx].GetHeader(eOffsetToData) == UNDEFINED_U32)   // indicates the IE is not present
 			continue;
+		num_ies++;
 		if(m_IE[ie_idx].GetHeader(eDataSign) > eDataSignSigned)
 			LOG_ERROR(eValidationError, eWarning, "Data sign field has invalid value");
 		if (m_IE[ie_idx].GetHeader(eDataSign) != eDataSignUnsigned)
@@ -994,13 +992,15 @@ bool HdrDpxFile::Validate()
 			LOG_ERROR(eValidationError, eWarning, "Offset to data is required to be multiple of 4\n");
 		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) & 3)
 			LOG_ERROR(eValidationError, eWarning, "End of line padding is required to be multiple of 4\n");
-		if ((m_IE[ie_idx].GetHeader(eEndOfImagePadding) & 3) && m_IE[ie_idx].GetHeader(eEndOfImagePadding) != UINT32_MAX)
+		if ((m_IE[ie_idx].GetHeader(eEndOfImagePadding) & 3) && m_IE[ie_idx].GetHeader(eEndOfImagePadding) != UNDEFINED_U32)
 			LOG_ERROR(eValidationError, eWarning, "End of image padding is required to be multiple of 4\n");
 		if (IsStringAllFs(m_IE[ie_idx].GetHeader(eDescriptionOfImageElement), 32))
 			LOG_ERROR(eValidationError, eWarning, "Description of IE field is all 0xff bytes; undefined strings should use single null character");
 		if (m_IE[ie_idx].GetHeader(eColorDifferenceSiting) > eSitingInterstitialHInterstitialV && m_IE[ie_idx].GetHeader(eColorDifferenceSiting) != eSitingUndefined)
 			LOG_ERROR(eValidationError, eWarning, "Color difference siting field has invalid value\n");
 	}
+	if(num_ies != GetHeader(eNumberOfImageElements))
+		LOG_ERROR(eValidationError, eWarning, "Number of image elements present does not match number of image elements header field");
 
 	// No validation for X/Y offset, center, original size
 	if (IsStringAllFs(GetHeader(eSourceImageFileName), 100))
@@ -1013,13 +1013,13 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Input device name field is all 0xff bytes; undefined strings should use single null character");
 	if (IsStringAllFs(GetHeader(eInputDeviceSN), 32))
 		LOG_ERROR(eValidationError, eWarning, "Input device SN field is all 0xff bytes; undefined strings should use single null character");
-	if (GetHeader(eBorderValidityXL) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXL) != UINT16_MAX)
+	if (GetHeader(eBorderValidityXL) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXL) != UNDEFINED_U16)
 		LOG_ERROR(eValidationError, eWarning, "Border validity XL field is larger than image width");
-	if (GetHeader(eBorderValidityXR) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXR) != UINT16_MAX)
+	if (GetHeader(eBorderValidityXR) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXR) != UNDEFINED_U16)
 		LOG_ERROR(eValidationError, eWarning, "Border validity XR field is larger than image width");
-	if (GetHeader(eBorderValidityYT) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYT) != UINT16_MAX)
+	if (GetHeader(eBorderValidityYT) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYT) != UNDEFINED_U16)
 		LOG_ERROR(eValidationError, eWarning, "Border validity YT field is larger than image height");
-	if (GetHeader(eBorderValidityYB) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYB) != UINT16_MAX)
+	if (GetHeader(eBorderValidityYB) > GetHeader(eLinesPerImageElement) && GetHeader(eBorderValidityYB) != UNDEFINED_U16)
 		LOG_ERROR(eValidationError, eWarning, "Border validity YB field is larger than image height");
 	// No validation for pixel aspect ratio or X/Y scanned size
 
@@ -1035,7 +1035,7 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Count field is all 0xff bytes; undefined strings should use single null character");
 	if (IsStringAllFs(GetHeader(eFormat), 32))
 		LOG_ERROR(eValidationError, eWarning, "Format field is all 0xff bytes; undefined strings should use single null character");
-	if (GetHeader(eFramePositionInSequence) != UINT32_MAX && GetHeader(eSequenceLength) != UINT32_MAX && 
+	if (GetHeader(eFramePositionInSequence) != UNDEFINED_U32 && GetHeader(eSequenceLength) != UNDEFINED_U32 &&
 		GetHeader(eFramePositionInSequence) > GetHeader(eSequenceLength))
 		LOG_ERROR(eValidationError, eWarning, "Frame position field is larger than sequence length field");
 	// No validation for Held count, frame rate of original, shutter angle
@@ -1047,7 +1047,7 @@ bool HdrDpxFile::Validate()
 	// No validation for SMPTE time code or user bits
 	if(GetHeader(eInterlace) != eInterlaceUndefined && GetHeader(eInterlace) > eInterlace2_1)
 		LOG_ERROR(eValidationError, eWarning, "Interlace field contains unknown value");
-	if(GetHeader(eFieldNumber) != UINT8_MAX && GetHeader(eFieldNumber) > 12)
+	if(GetHeader(eFieldNumber) != UNDEFINED_U8 && GetHeader(eFieldNumber) > 12)
 		LOG_ERROR(eValidationError, eWarning, "Field number field should not exceed 12 (see definition in ST 268-1)");
 	if(GetHeader(eVideoSignalStandard) > eVideoSignalSECAM &&
 		!(GetHeader(eVideoSignalStandard) >= eVideoSignalBT_601_525_4x3 || GetHeader(eVideoSignalStandard) <= eVideoSignalBT_601_625_4x3) &&
@@ -1266,6 +1266,7 @@ void HdrDpxFile::SetHeader(HdrDpxFieldsU32 field, uint32_t value)
 		break;
 	case eTotalImageFileSize:
 		m_dpx_header.FileHeader.FileSize = value;
+		LOG_ERROR(eBadParameter, eWarning, "Setting total image file size header attribute has no effect");
 		break;
 	case eGenericSectionHeaderLength:
 		m_dpx_header.FileHeader.GenericSize = value;
@@ -1723,6 +1724,42 @@ HdrDpxByteOrder HdrDpxFile::GetHeader(HdrDpxFieldsByteOrder field) const
 	return m_byteorder;
 }
 
+void HdrDpxFile::SetHeader(HdrDpxFieldsVersion field, HdrDpxVersion value)
+{
+	if (m_is_header_locked)
+	{
+		LOG_ERROR(eHeaderLocked, eWarning, "Attempted to change locked header field");
+		return;
+	}
+	switch (value)
+	{
+	case eDPX_1_0:
+		CopyStringN(m_dpx_header.FileHeader.Version, "V1.0", 8);
+		LOG_ERROR(eBadParameter, eWarning, "V1.0 file output is not supported.");
+		break;
+	case eDPX_2_0:
+		CopyStringN(m_dpx_header.FileHeader.Version, "V2.0", 8);
+		LOG_ERROR(eBadParameter, eWarning, "V2.0 file output is not supported.");
+		break;
+	case eDPX_2_0_HDR:
+		CopyStringN(m_dpx_header.FileHeader.Version, "V2.0HDR", 8);
+		break;
+	case eDPX_Unrecognized:
+		LOG_ERROR(eBadParameter, eWarning, "Cannot set version field to unrecongized value");
+	}
+}
+
+HdrDpxVersion HdrDpxFile::GetHeader(HdrDpxFieldsVersion field) const
+{
+	if (CopyToStringN(m_dpx_header.FileHeader.Version, 8).compare("V1.0") == 0)
+		return eDPX_1_0;
+	if (CopyToStringN(m_dpx_header.FileHeader.Version, 8).compare("V2.0") == 0)
+		return eDPX_2_0;
+	if (CopyToStringN(m_dpx_header.FileHeader.Version, 8).compare("V2.0HDR") == 0)
+		return eDPX_2_0_HDR;
+	return eDPX_Unrecognized;
+}
+
 
 void HdrDpxFile::SetUserData(std::string userid, std::vector<uint8_t> userdata)
 {
@@ -1768,7 +1805,7 @@ void HdrDpxFile::SetStandardsBasedMetadata(std::string sbm_descriptor, std::vect
 
 bool HdrDpxFile::GetStandardsBasedMetadata(std::string &sbm_descriptor, std::vector<uint8_t> &sbmdata) const
 {
-	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UINT32_MAX)		// nothing to do
+	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset == UNDEFINED_U32)		// nothing to do
 		return false;
 	sbm_descriptor = CopyToStringN(m_dpx_sbmdata.SbmFormatDescriptor, 128);
 	sbmdata = m_dpx_sbmdata.SbmData;
@@ -1790,7 +1827,7 @@ int HdrDpxFile::GetNumErrors(void)  const
 	return m_err.GetNumErrors();
 }
 
-void HdrDpxFile::GetError(int err_idx, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg)
+void HdrDpxFile::GetError(int err_idx, ErrorCode &errcode, ErrorSeverity &severity, std::string &errmsg) const
 {
 	return m_err.GetError(err_idx, errcode, severity, errmsg);
 }

@@ -1,5 +1,5 @@
 /***************************************************************************
-*    Copyright (c) 2013-2019, Broadcom Inc.
+*    Copyright (c) 2019-2021, Broadcom Inc.
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -30,9 +30,11 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 
-//! \file main.cpp  Defines the entry point for the console application.
-//
-//  These are wrapper functions for Win32 to be able to call the mainline in codec_main.c
+/** @file dump_dpx.cpp
+	@brief Defines the entry point for the dump_dpx application.
+
+	This file provides a sample application that dumps the header and image data for an ST 268-2 compliant DPX file.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,12 +46,19 @@
 
 using namespace std;
 
+// The code in the following #ifdef is needed for Windows to convert the _TCHAR arguments to char 
 #ifdef _MSC_VER
 #include <tchar.h>
 
 int dump_dpx(int argc, char **argv);
 
-// returns number of TCHARs in string
+
+/**
+	Returns number of _TCHARs in string
+
+	@param wstr	input string
+	@return		number of _TCHARS in string
+*/
 int wstrlen(_TCHAR * wstr)
 {
     int l_idx = 0;
@@ -57,8 +66,13 @@ int wstrlen(_TCHAR * wstr)
     return l_idx;
 }
 
-  
-// Allocate char string and copy TCHAR->char->string
+
+/**
+	Allocate char string and copy _TCHAR->char->string
+
+	@param wSrc input string
+	@return		pointer to new char * string containing copy of input string
+*/
 char * wstrdup(_TCHAR * wSrc)
 {
     int l_idx=0;
@@ -75,9 +89,13 @@ char * wstrdup(_TCHAR * wSrc)
 }
  
   
- 
-// allocate argn structure parallel to argv
-// argn must be released
+/** 
+	Allocate argn structure parallel to argv. argn must be released.
+
+	@param argc	number of arguments
+	@param argv	arguments as _TCHAR strings
+	@return		pointer to array of arguments as char strings
+*/
 char ** allocate_argn (int argc, _TCHAR* argv[])
 {
     char ** l_argn = (char **)malloc(argc * sizeof(char*));
@@ -87,8 +105,14 @@ char ** allocate_argn (int argc, _TCHAR* argv[])
     }
     return l_argn;
 }
- 
-// release argn and its content
+
+
+/**
+	Release argn and its allocated memory
+
+	@param argc number of arguments
+	@param nargv	pointer to array of arguments as char strings
+*/
 void release_argn(int argc, char ** nargv)
 {
     for (int idx=0; idx<argc; idx++) {
@@ -97,6 +121,14 @@ void release_argn(int argc, char ** nargv)
     free(nargv);
 }
 
+
+/**
+	Entry point for Windows console app
+
+	@param argc	number of arguments
+	@param argv array of arguments (as _TCHAR strings)
+	@return		exit code
+*/
 int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
@@ -108,7 +140,14 @@ int _tmain(int argc, _TCHAR* argv[])
 }
 #endif
 
-static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
+
+/**
+	Prints to cerr a specified message along with the error log from the DPX file
+
+	@param logmessage	Message to include with the error log
+	@param f			HdrDpxFile associated with DPX file
+*/
+static void dump_error_log(const std::string logmessage, const Dpx::HdrDpxFile &f)
 {
 	Dpx::ErrorCode code;
 	Dpx::ErrorSeverity severity;
@@ -123,6 +162,13 @@ static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 	}
 }
 
+
+/**
+	Converts a byte to a 2-character zero padded hex string 
+
+	@param v	Byte to convert
+	@return		String representing the value of the byte
+*/
 inline string tohex(uint8_t v)
 {
 	stringstream ss;
@@ -134,6 +180,14 @@ inline string tohex(uint8_t v)
 	return ss.str();
 }
 
+
+/**
+	Maps a datum label to a file extension (string)
+
+	@param dl			Datum label
+	@param chroma_idx	0 = even line (Cb), other values = odd line (Cr) for 4:2:0
+	@return				String containing the extension
+*/
 std::string datum_label_to_ext(Dpx::DatumLabel dl, uint8_t chroma_idx)
 {
 	switch (dl)
@@ -181,6 +235,17 @@ std::string datum_label_to_ext(Dpx::DatumLabel dl, uint8_t chroma_idx)
 	return "unk";
 }
 
+
+/**
+	Converts an integer sample to a normalized [0, 1.0] double-precision value
+
+	@param i			Integer sample to convert
+	@param is_chroma	Flag indicating whether the sample is chroma
+	@param lowcode		Low code value
+	@param is_signed	Flag indicating whether the sample is signed
+	@param bit_depth_in	The bit depth of the input sample
+	@return				Normalized floating point sample
+*/
 inline double int_to_norm_double(int32_t i, bool is_chroma, float lowcode, bool is_signed, uint8_t bit_depth_in)
 {
 	// Output is normalized [0..1.0]
@@ -196,6 +261,16 @@ inline double int_to_norm_double(int32_t i, bool is_chroma, float lowcode, bool 
 		return static_cast<double>(i) / ((1 << bit_depth_in) - 1);
 }
 
+
+/**
+	Converts a normalized [0, 1.0] double-precision value to an integer sample
+
+	@param f			Double sample to convert
+	@param bits			The desired bit depth of the integer sample
+	@param full_range	Flag indicating whether the output sample is full range
+	@param is_chroma	Flag indicating whether the sample is chroma
+	@return				Integer sample
+*/
 inline uint16_t norm_double_to_uint(double f, uint8_t bits, bool full_range, bool is_chroma)
 {
 	if (full_range)
@@ -211,6 +286,22 @@ inline uint16_t norm_double_to_uint(double f, uint8_t bits, bool full_range, boo
 	}
 }
 
+
+/**
+	Write a row of integer samples to a file
+
+	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
+	@param datum_offset		Offset within rowdata where first sample of desired component is located
+	@param num_components	Number of components (samples) for each pixel
+	@param bit_depth_in		The bit depth of the integer samples in rowdata
+	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param is_signed		Flag indicating whether the samples are signed
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool is_signed, bool write_full_range, bool is_chroma, ofstream &raw_fp)
 {
 	if (bit_depth_conv == 0)
@@ -261,7 +352,19 @@ void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8
 }
 
 
+/**
+	Write a row of 32-bit floating point samples to a file
 
+	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
+	@param datum_offset		Offset within rowdata where first sample of desired component is located
+	@param num_components	Number of components (samples) for each pixel
+	@param bit_depth_conv	If different from 32, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, ofstream &raw_fp)
 {
 
@@ -310,6 +413,20 @@ void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t
 
 }
 
+
+/**
+	Write a row of 64-bit floating point samples to a file
+
+	@param rowdata			vector containing FP64 sample array. There are num_components samples for each pixel.
+	@param datum_offset		Offset within rowdata where first sample of desired component is located
+	@param num_components	Number of components (samples) for each pixel
+	@param bit_depth_conv	If different from 64, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, ofstream &raw_fp)
 {
 
@@ -358,6 +475,18 @@ void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_
 
 }
 
+
+/**
+	Write a single 32-bit floating point sample to a file
+
+	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
+	@param bit_depth_conv	If different from 32, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_raw_datum(float rowdata, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<std::ofstream> raw_fp)
 {
 
@@ -388,6 +517,18 @@ void write_raw_datum(float rowdata, uint8_t bit_depth_conv, float hicode, float 
 	}
 }
 
+
+/**
+	Write a single 64-bit floating point sample to a file
+
+	@param rowdata			vector containing FP64 sample array. There are num_components samples for each pixel.
+	@param bit_depth_conv	If different from 64, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<std::ofstream> raw_fp)
 {
 
@@ -418,7 +559,20 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 	}
 }
 
-int datacount;
+
+/**
+	Write a single integer sample to a file
+
+	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
+	@param bit_depth_in		Bit depth of integer sample
+	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param is_signed		Flag indicating sample is signed
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
 void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool is_signed, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
 {
 	if (bit_depth_conv == 0)
@@ -449,20 +603,28 @@ void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
 		raw_fp->write((char *)&outrow, sizeof(uint8_t));
 	}
-	datacount++;
-
 }
 
 
-void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_t ie_idx, Dpx::HdrDpxImageElement *ie, std::string raw_base_name, uint8_t &alt_chroma, std::vector<bool> &is_chroma)
+/**
+	Function to open all raw bitplane files for output at once for a specific image element
+
+	@param[out] fp_list			vector containing the open ofstream objects
+	@param[in] ie_idx			Current image element index (included in output file name)
+	@param[in] dl_list			Vector (list) containing datum labels
+	@param[in] raw_base_name	String containing the base file name for the raw files.
+	@param[out] alt_chroma		Returns the index within fp_list of the file object that will contain the C2 samples for alternating chroma lines (4:2:0 only)
+	@param[out] is_chroma		vector that indicates whether each returned open file contains chroma samples or not
+*/
+void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_t ie_idx, std::vector<Dpx::DatumLabel> dl_list, std::string raw_base_name, uint8_t &alt_chroma, std::vector<bool> &is_chroma)
 {
 	std::shared_ptr<std::ofstream> first_y_fp = NULL;
 	std::shared_ptr<std::ofstream> first_a_fp = NULL;
 	std::shared_ptr<std::ofstream> new_fp = NULL;
 	int i = 0;
 
-	alt_chroma = UINT8_MAX;
-	for (auto c : ie->GetDatumLabels())
+	alt_chroma = UNDEFINED_U8;
+	for (auto c : dl_list)
 	{
 		is_chroma.push_back((c == Dpx::DATUM_C) || (c == Dpx::DATUM_CB) || (c == Dpx::DATUM_CR));
 		if (c == Dpx::DATUM_Y2)
@@ -484,7 +646,7 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 		}
 	}
 
-	if (alt_chroma != UINT8_MAX)
+	if (alt_chroma != UNDEFINED_U8)
 	{
 		new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
 		std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(Dpx::DATUM_C, 1));
@@ -493,16 +655,21 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 	}
 }
 
-// Example calling sequence for HDR DPX read:
+
+/**
+	Main entry point for the app
+
+	@param argc		Number of command line arguments.
+	@param argv		Array of char strings, each containing one command-line argument
+	@return			Error code
+*/
 #ifdef _MSC_VER
 int dump_dpx(int argc, char **argv)
 #else
 int main(int argc, char *argv[])
 #endif
 {
-	Dpx::HdrDpxImageElement *ie;
-	std::string userid, sbmdesc;
-	std::vector<uint8_t> userdata, sbmdata;
+	// Configuration variables:
 	int bit_depth_conv = 0;
 	std::string plane_order;
 	bool output_raw = false;
@@ -524,6 +691,8 @@ int main(int argc, char *argv[])
 		std::cerr << "  viewing format using ffmpeg with the option -pix_fmt set to yuv420p, yuv422p, yuv444p, yuva420p, yuva422p, yuva444p rgb, or rgba based on the file type\n";
 		return 0;
 	}
+
+	// Parse arguments
 	std::string filename(argv[1]);
 
 	for (int i = 2; i < argc; ++i)
@@ -577,6 +746,9 @@ int main(int argc, char *argv[])
 
 	std::cout << f;  // Dump header
 
+	// Read user data and print
+	std::string userid;
+	std::vector<uint8_t> userdata;
 	if (f.GetUserData(userid, userdata))
 	{
 
@@ -591,6 +763,9 @@ int main(int argc, char *argv[])
 		// Could also print user-defined data as a string using f.GetHeader(Dpx::eUserDefinedData)
 	}
 
+	// Read standards-based metadata & print
+	std::string sbmdesc;
+	std::vector<uint8_t> sbmdata;
 	if (f.GetStandardsBasedMetadata(sbmdesc, sbmdata))
 	{
 		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
@@ -615,21 +790,23 @@ int main(int argc, char *argv[])
 		std::cout << "\n";
 	}
 
-	if (output_raw)
+	// Output pixel data
+	if (output_raw)   // Raw planes to files
 	{
 		// Make a list of all planes with corresponding IEs
 		for (auto src_ie_idx : f.GetIEIndexList())
 		{
 			std::vector<std::shared_ptr<std::ofstream>> raw_fp_list;
-			ie = f.GetImageElement(src_ie_idx);
+			Dpx::HdrDpxImageElement *ie = f.GetImageElement(src_ie_idx);
 			uint8_t num_components = ie->GetNumberOfComponents();
 			uint8_t alt_chroma;
 			std::vector<bool> is_chroma;
-			open_raw_files(raw_fp_list, src_ie_idx, ie, raw_base_name, alt_chroma, is_chroma);
+			open_raw_files(raw_fp_list, src_ie_idx, ie->GetDatumLabels(), raw_base_name, alt_chroma, is_chroma);
 			float hicode = ie->GetHeader(Dpx::eReferenceHighDataCode);
 			float lowcode = ie->GetHeader(Dpx::eReferenceLowDataCode);
 			bool is_signed = (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned);
 			uint8_t bit_depth_in = static_cast<uint8_t>(ie->GetHeader(Dpx::eBitDepth));
+
 			for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 			{
 				if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR32)  // 32-bit float
@@ -684,20 +861,21 @@ int main(int argc, char *argv[])
 			}
 			for (auto fp : raw_fp_list)
 			{
-				cout << fp->tellp() << "\n";
 				fp->close();
 			}
 		}
 	}
-	else
+	else  // Dump pixel data as text
 	{ 
 		for (auto src_ie_idx : f.GetIEIndexList())
 		{
-			ie = f.GetImageElement(src_ie_idx);
+			Dpx::HdrDpxImageElement *ie = f.GetImageElement(src_ie_idx);
+
 			std::cout << "Component types for image element " << src_ie_idx << ": ";
 			for (auto c : ie->GetDatumLabels())
 				std::cout << ie->DatumLabelToName(c) << " ";
 			std::cout << "\n";
+
 			for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 			{
 				std::cout << "\n" << row << ": ";
@@ -710,7 +888,7 @@ int main(int argc, char *argv[])
 					while (datum_idx < ie->GetWidth() * ie->GetNumberOfComponents())
 					{
 						std::cout << "(";
-						for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+						for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 						{
 							std::cout << rowdata[datum_idx++] << ",";
 						}
@@ -726,7 +904,7 @@ int main(int argc, char *argv[])
 					for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 					{
 						std::cout << "(";
-						for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+						for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 						{
 							std::cout << rowdata[datum_idx++] << ",";
 						}
@@ -742,7 +920,7 @@ int main(int argc, char *argv[])
 					for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 					{
 						std::cout << "(";
-						for (uint8_t c = 0; c < ie->GetNumberOfComponents(); ++c)
+						for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
 						{
 							std::cout << rowdata[datum_idx++] << ",";
 						}

@@ -394,12 +394,12 @@ std::string HdrDpxImageElement::DatumLabelToName(Dpx::DatumLabel dl) const
 	return "Unrecognized";
 }
 
-HdrDpxImageElement::HdrDpxImageElement()
+HdrDpxImageElement::HdrDpxImageElement() : m_fifo(16)
 {
 	m_isinitialized = false;
 }
 
-HdrDpxImageElement::HdrDpxImageElement(uint8_t ie_index, std::fstream *fstream_ptr, HDRDPXFILEFORMAT *dpxf_ptr, FileMap *file_map_ptr)
+HdrDpxImageElement::HdrDpxImageElement(uint8_t ie_index, std::fstream *fstream_ptr, HDRDPXFILEFORMAT *dpxf_ptr, FileMap *file_map_ptr) : m_fifo(16)
 {
 	m_is_header_locked = false;
 	Initialize(ie_index, fstream_ptr, dpxf_ptr, file_map_ptr);
@@ -558,7 +558,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
 	}
 	if (m_dpx_ie_ptr->BitSize >= 32)
 	{
-		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing integer pixels to floating point file");
+		LOG_ERROR(eBadParameter, eFatal, "Failed attempt reading integer pixels from floating point file");
 		return;
 	}
 	
@@ -583,7 +583,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *datum_ptr)
 	}
 	if (m_dpx_ie_ptr->BitSize != 32)
 	{
-		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing single-precision pixels to file");
+		LOG_ERROR(eBadParameter, eFatal, "Failed attempt reading single-precision pixels from file");
 		return;
 	}
 
@@ -608,7 +608,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *datum_ptr)
 	}
 	if (m_dpx_ie_ptr->BitSize != 32)
 	{
-		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing double-precision pixels to file");
+		LOG_ERROR(eBadParameter, eFatal, "Failed attempt reading double-precision pixels from file");
 		return;
 	}
 
@@ -876,13 +876,13 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 
 
 
-void HdrDpxImageElement::WriteFlush(Fifo *fifo)
+void HdrDpxImageElement::WriteFlush()
 {
 	uint32_t image_data_word;
 
-	while (fifo->m_fullness >= 32)
+	while (m_fifo.m_fullness >= 32)
 	{
-		image_data_word = fifo->GetBitsUi(32);
+		image_data_word = m_fifo.GetBitsUi(32);
 		if (m_byte_swap)
 			ByteSwap32((void *)(&image_data_word));
 		m_filestream_ptr->write((char *)(&image_data_word), 4);
@@ -890,33 +890,33 @@ void HdrDpxImageElement::WriteFlush(Fifo *fifo)
 }
 
 
-void HdrDpxImageElement::WriteDatum(Fifo *fifo, int32_t datum)
+void HdrDpxImageElement::WriteDatum(int32_t datum)
 {
 	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
 	switch (m_dpx_ie_ptr->Packing)
 	{
 	case 0:
-		fifo->PutDatum(datum, bpc, m_direction_r2l);
+		m_fifo.PutDatum(datum, bpc, m_direction_r2l);
 		break;
 	case 1:  /* Method A */
-		if (m_direction_r2l && (fifo->m_fullness == 0 || fifo->m_fullness == 16))
-			fifo->FlipPutBits(0, (bpc == 10) ? 2 : 4);
-		fifo->PutDatum(datum, bpc, m_direction_r2l);
-		if (!m_direction_r2l && (fifo->m_fullness == 12 || fifo->m_fullness == 28 || fifo->m_fullness == 30))
-			fifo->PutBits(0, (bpc == 10) ? 2 : 4);
+		if (m_direction_r2l && (m_fifo.m_fullness == 0 || m_fifo.m_fullness == 16))
+			m_fifo.FlipPutBits(0, (bpc == 10) ? 2 : 4);
+		m_fifo.PutDatum(datum, bpc, m_direction_r2l);
+		if (!m_direction_r2l && (m_fifo.m_fullness == 12 || m_fifo.m_fullness == 28 || m_fifo.m_fullness == 30))
+			m_fifo.PutBits(0, (bpc == 10) ? 2 : 4);
 		break;  /* Method B */
 	case 2:
-		if (!m_direction_r2l && (fifo->m_fullness == 0 || fifo->m_fullness == 16))
-			fifo->PutBits(0, (bpc == 10) ? 2 : 4);
-		fifo->PutDatum(datum, bpc, m_direction_r2l);
-		if (m_direction_r2l && (fifo->m_fullness == 12 || fifo->m_fullness == 28 || fifo->m_fullness == 30))
-			fifo->FlipPutBits(0, (bpc == 10) ? 2 : 4);
+		if (!m_direction_r2l && (m_fifo.m_fullness == 0 || m_fifo.m_fullness == 16))
+			m_fifo.PutBits(0, (bpc == 10) ? 2 : 4);
+		m_fifo.PutDatum(datum, bpc, m_direction_r2l);
+		if (m_direction_r2l && (m_fifo.m_fullness == 12 || m_fifo.m_fullness == 28 || m_fifo.m_fullness == 30))
+			m_fifo.FlipPutBits(0, (bpc == 10) ? 2 : 4);
 		break;
 	}
-	WriteFlush(fifo);
+	WriteFlush();
 }
 
-void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos)
+void HdrDpxImageElement::WritePixel(uint32_t xpos)
 {
 	int component;
 	int num_components;
@@ -942,18 +942,18 @@ void HdrDpxImageElement::WritePixel(Fifo *fifo, uint32_t xpos)
 		case 12:
 		case 16:
 			int_datum = m_int_row[xpos * num_components + component];
-			WriteDatum(fifo, int_datum);
+			WriteDatum(int_datum);
 			break;
 		case 32:
 			c_r32.r32 = m_float_row[xpos * num_components + component];
-			fifo->PutBits(c_r32.d, 32);
-			WriteFlush(fifo);
+			m_fifo.PutBits(c_r32.d, 32);
+			WriteFlush();
 			break;
 		case 64:
 			c_r64.r64 = m_double_row[xpos * num_components + component];
-			fifo->PutBits(c_r64.d[0], 32);
-			fifo->PutBits(c_r64.d[1], 32);
-			WriteFlush(fifo);
+			m_fifo.PutBits(c_r64.d[0], 32);
+			m_fifo.PutBits(c_r64.d[1], 32);
+			WriteFlush();
 			break;
 		}
 
@@ -976,11 +976,11 @@ bool HdrDpxImageElement::IsNextSame(uint32_t xpos, int32_t pixel[])
 	return true;
 }
 
-void HdrDpxImageElement::WriteLineEnd(Fifo *fifo)
+void HdrDpxImageElement::WriteLineEnd()
 {
-	if (fifo->m_fullness & 0x1f)   // not an even multiple of 32 
-		fifo->PutDatum(0, 32 - (fifo->m_fullness & 0x1f), m_direction_r2l);
-	WriteFlush(fifo);
+	if (m_fifo.m_fullness & 0x1f)   // not an even multiple of 32 
+		m_fifo.PutDatum(0, 32 - (m_fifo.m_fullness & 0x1f), m_direction_r2l);
+	WriteFlush();
 }
 
 
@@ -1064,7 +1064,6 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	uint32_t xpos;
 	int component;
 	int num_components;
-	Fifo fifo(16);
 	bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
 	uint32_t run_length = 0;
 	bool freeze_increment = false;
@@ -1073,6 +1072,8 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	int32_t rle_pixel[8];
 	uint32_t row_wr_idx;
 	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
+
+	m_fifo.Clear();
 
 	if (m_dpx_ie_ptr->Encoding == 1)
 	{
@@ -1089,11 +1090,11 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 		if (row == 0)
 		{
 			uint32_t data_offset = m_dpx_ie_ptr->DataOffset;
-			if (data_offset == UINT32_MAX)
+			if (data_offset == UNDEFINED_U32)
 			{
 				std::vector<uint32_t> rle_ie_offsets = m_file_map_ptr->GetRLEIEDataOffsets();
 				data_offset = rle_ie_offsets[m_ie_index];
-				if (data_offset == UINT32_MAX)
+				if (data_offset == UNDEFINED_U32)
 				{
 					LOG_ERROR(eBadParameter, eFatal, "Could not find valid image data offset");
 					return;
@@ -1128,8 +1129,8 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 		{
 			if (xpos == m_width - 1)  // Only one pixel left on line
 			{
-				WriteDatum(&fifo, 2);  // Indicates run of 1 pixel
-				WritePixel(&fifo, xpos);
+				WriteDatum(2);  // Indicates run of 1 pixel
+				WritePixel(xpos);
 				xpos++;
 			}
 			else {
@@ -1167,18 +1168,18 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 				run_length++;
 				if (run_type)
 				{
-					WriteDatum(&fifo, 1 | (run_length << 1));
-					WritePixel(&fifo, xpos);
+					WriteDatum(1 | (run_length << 1));
+					WritePixel(xpos);
 					xpos += run_length;
 					if (xpos > m_width)
 						std::cout << "Something went wrong";
 				}
 				else
 				{
-					WriteDatum(&fifo, 0 | (run_length << 1));
+					WriteDatum(0 | (run_length << 1));
 					while (run_length--)
 					{
-						WritePixel(&fifo, xpos);
+						WritePixel(xpos);
 						xpos++;
 						if (xpos > m_width)
 							std::cout << "Something went wrong";
@@ -1190,7 +1191,7 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 		{
 			for (run_length = 0; run_length < m_width; ++run_length)
 			{
-				WritePixel(&fifo, xpos);
+				WritePixel(xpos);
 				xpos++;
 				if (xpos > m_width)
 					std::cout << "Something went wrong";
@@ -1200,13 +1201,13 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 		if (xpos >= m_width)
 		{
 			// pad last line
-			WriteLineEnd(&fifo);
+			WriteLineEnd();
 		}
 	}
 	m_previous_file_offset = static_cast<uint32_t>(m_filestream_ptr->tellp());
 	if (row == m_height - 1)
 	{
-		uint32_t padding = UINT32_MAX;
+		uint32_t padding = 0;
 		for (uint32_t b = 0; b < m_dpx_ie_ptr->EndOfImagePadding; ++b)
 			m_filestream_ptr->write((char *)(&padding), 4);
 		if (m_dpx_ie_ptr->Encoding == 1)
@@ -1348,8 +1349,8 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth field, HdrDpxBitDepth va
 		((m_dpx_ie_ptr->BitSize == 32 || m_dpx_ie_ptr->BitSize==64) && value<=16))
 	{
 		LOG_ERROR(eNoError, eInformational, "Changing bit depth invalidates previous low/high code values");
-		m_dpx_ie_ptr->HighData.d = UINT32_MAX;
-		m_dpx_ie_ptr->LowData.d = UINT32_MAX;
+		m_dpx_ie_ptr->HighData.d = UNDEFINED_U32;
+		m_dpx_ie_ptr->LowData.d = UNDEFINED_U32;
 	}
 	m_dpx_ie_ptr->BitSize = static_cast<uint8_t>(value);
 	

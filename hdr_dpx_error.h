@@ -30,38 +30,47 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 #pragma once
+/** @file hdr_dpx_error.h
+	@brief Defines error codes, severities, and ErrorObject. */
 #include <string>
 #include <vector>
 
 namespace Dpx {
 
+	/** Severity of errors */
 	enum ErrorSeverity
 	{
-		eInformational,
-		eWarning,
-		eFatal
+		eInformational,  ///< For information only
+		eWarning,    ///< Error is warning (file can still be processed)
+		eFatal     ///< Error is severe enough that file can no longer be read or written
 	};
 
+	/** Error code list */
 	enum ErrorCode
 	{
-		eNoError = 0,
-		eValidationError,
-		eMissingCoreField,
-		eUnexpectedNonzeroBit,
-		eFileOpenError,
-		eFileReadError,
-		eFileWriteError,
-		eBadParameter,
-		eHeaderLocked
+		eNoError = 0,  ///< Not an error
+		eValidationError,   ///< Validation error
+		eMissingCoreField,   ///< A core field is missing or undefined
+		eUnexpectedNonzeroBit,   ///< A nonzero bit was detected where a zero bit was expected
+		eFileOpenError,    ///< Error occurred while opening the file
+		eFileReadError,    ///< Error occurred while reading the file
+		eFileWriteError,   ///< Error occurred while writing the file
+		eBadParameter,   ///< A bad parameter was passed
+		eHeaderLocked   ///< The header was attempted to be modified while it was locked
 	};
 
+	/** Error object class */
 	class ErrorObject
 	{
 	public:
-		explicit operator bool() const {  // Makes return object testable
+		/** Function to make object testable
+			@return					true if object has any logged errors or messages */
+		explicit operator bool() const { 
 			return (m_code.size() != 0);
 		}
-		ErrorObject operator + (ErrorObject const &obj)   // Combine the errors from 2 objects
+		/** Can use + operator to combine the errors from 2 objects
+			@param obj			Object to combine */
+		ErrorObject operator + (ErrorObject const &obj)  
 		{
 			ErrorObject err;
 			Dpx::ErrorCode code;
@@ -81,7 +90,9 @@ namespace Dpx {
 			}
 			return err;
 		}
-		ErrorObject& operator += (ErrorObject const &obj)
+		/** Can use += operator to append errors from 1 object to another
+			@param obj			object to append */
+		ErrorObject& operator += (ErrorObject const &obj)  
 		{
 			Dpx::ErrorCode code;
 			Dpx::ErrorSeverity severity;
@@ -95,6 +106,10 @@ namespace Dpx {
 			}
 			return *this;
 		}
+		/** Log an error
+			@param errorcode			Error code
+			@param severity				Error severity
+			@param errmsg				Error message */
 		void LogError(Dpx::ErrorCode errorcode, Dpx::ErrorSeverity severity, std::string errmsg)
 		{
 			m_code.push_back(errorcode);
@@ -103,6 +118,11 @@ namespace Dpx {
 			if (severity > m_worst_severity)
 				m_worst_severity = severity;
 		}
+		/** Get the error at the specified index
+			@param[in] index			index of the error (starting from 0)
+			@param[out] errcode			returns the error code
+			@param[out] severity		returns the error severity
+			@param[out] errmsg			returns the error message */
 		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
 		{
 			if (index >= m_code.size())
@@ -115,14 +135,17 @@ namespace Dpx {
 			severity = m_severity[index];
 			errmsg = m_message[index];
 		}
+		/** Returns the number of errors that have been logged */
 		int GetNumErrors() const
 		{
 			return static_cast<int>(m_severity.size());
 		}
+		/** Returns the worst severity level among the errors that have been logged */
 		Dpx::ErrorSeverity GetWorstSeverity() const
 		{
 			return m_worst_severity;
 		}
+		/** Clear the error log */
 		void Clear()
 		{
 			m_severity.clear();
@@ -131,10 +154,10 @@ namespace Dpx {
 			m_worst_severity = Dpx::eInformational;
 		}
 	private:
-		std::vector<Dpx::ErrorSeverity> m_severity;
-		std::vector<Dpx::ErrorCode> m_code;
-		std::vector<std::string> m_message;
-		Dpx::ErrorSeverity m_worst_severity = Dpx::eInformational;
+		std::vector<Dpx::ErrorSeverity> m_severity;   ///< list of severity levels for logged errors
+		std::vector<Dpx::ErrorCode> m_code;	    ///< list of error codes for logged errors
+		std::vector<std::string> m_message;		///< list of error messages for logged errors
+		Dpx::ErrorSeverity m_worst_severity = Dpx::eInformational;   ///< track worst severity of the errors logged
 	};
 
 }

@@ -30,11 +30,12 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 
-/*! \file fifo.c
-*    Generic bit FIFO functions */
+/** @file fifo.cpp
+     Generic bit FIFO functions */
 #include <iostream>
 #include "fifo.h"
 
+/** Error logging macro */
 #ifdef NDEBUG
 #define ASSERT_MSG(condition, msg) 0
 #else
@@ -48,9 +49,9 @@
 #endif
 
 
-//! Initialize a FIFO object
-/*! \param fifo		 Pointer to FIFO data structure
-\param size		 Specifies FIFO size in bytes */
+/** Constructor
+	@param size		 Specifies FIFO size in bytes
+*/
 Fifo::Fifo(int size)
 {
 	m_data.resize(size);
@@ -62,6 +63,9 @@ Fifo::Fifo(int size)
 }
 
 
+/** Copy constructor
+	@param f	FIFO object to copy
+*/
 Fifo::Fifo(const Fifo &f)
 {
 	m_data = f.m_data;
@@ -74,19 +78,10 @@ Fifo::Fifo(const Fifo &f)
 }
 
 
-//! Free a FIFO object
-/*! \param fifo		Pointer to FIFO data structure */
-Fifo::~Fifo()
-{
-	;
-}
-
-
-//! Get bits from a FIFO
-/*! \param fifo		Pointer to FIFO data structure
-\param n		Number of bits to retrieve
-\param sign_extend Flag indicating to extend sign bit for return value
-\return			Value from FIFO */
+/** Get unsigend int value from the FIFO
+	@param n		Number of bits to retrieve
+	@return			Value from FIFO
+*/
 uint32_t Fifo::GetBitsUi(int n)
 {
 	unsigned int d = 0;
@@ -108,6 +103,11 @@ uint32_t Fifo::GetBitsUi(int n)
 	return (d);
 }
 
+
+/** Get signed int value from the FIFO (2's complement)
+	@param n	Number of bits to retrieve
+	@return		Value from FIFO
+*/
 int32_t Fifo::GetBitsI(int n)
 {
 	unsigned int d = 0;
@@ -137,10 +137,10 @@ int32_t Fifo::GetBitsI(int n)
 }
 
 
-//! Put bits into a FIFO
-/*! \param fifo		Pointer to FIFO data structure
-\param d		Value to add to FIFO
-\param n		Number of bits to add to FIFO */
+/** Put bits into a FIFO
+	@param d		Unsigned value to add to FIFO
+	@param nbits	Number of bits to add to FIFO 
+*/
 void Fifo::PutBits(uint32_t d, int nbits)
 {
 	int i;
@@ -164,6 +164,11 @@ void Fifo::PutBits(uint32_t d, int nbits)
 		m_max_fullness = m_fullness;
 }
 
+
+/** Put bits into a FIFO
+	@param d		Signed value to add to FIFO
+	@param nbits	Number of bits to add to FIFO
+*/
 void Fifo::PutBits(int32_t d, int nbits)
 {
 	int i;
@@ -188,11 +193,10 @@ void Fifo::PutBits(int32_t d, int nbits)
 }
 
 
-//! Get bits from a FIFO in a 32-bit reverse order
-/*! \param fifo		Pointer to FIFO data structure
-\param n		Number of bits to retrieve
-\param sign_extend Flag indicating to extend sign bit for return value
-\return			Value from FIFO */
+/** Get (unsigend) bits from a FIFO in a 32-bit reverse order
+	@param n		Number of bits to retrieve
+	@return			Value from FIFO 
+*/
 uint32_t Fifo::FlipGetBitsUi(int n)
 {
 	unsigned int d = 0;
@@ -220,6 +224,11 @@ uint32_t Fifo::FlipGetBitsUi(int n)
 	return (d);
 }
 
+
+/** Get (signed) bits from a FIFO in a 32-bit reverse order
+	@param n		Number of bits to retrieve
+	@return			Value from FIFO
+*/
 int32_t Fifo::FlipGetBitsI(int n)
 {
 	unsigned int d = 0;
@@ -254,10 +263,10 @@ int32_t Fifo::FlipGetBitsI(int n)
 }
 
 
-//! Put bits into a FIFO in 32-bit reverse order
-/*! \param fifo		Pointer to FIFO data structure
-\param d		Value to add to FIFO
-\param n		Number of bits to add to FIFO */
+/** Put bits into a FIFO in 32-bit reverse order
+	@param d		(unsigned) Value to add to FIFO
+	@param nbits	Number of bits to add to FIFO 
+*/
 void Fifo::FlipPutBits(uint32_t d, int nbits)
 {
 	int i;
@@ -286,6 +295,11 @@ void Fifo::FlipPutBits(uint32_t d, int nbits)
 		m_max_fullness = m_fullness;
 }
 
+
+/** Put bits into a FIFO in 32-bit reverse order
+	@param d		(signed) Value to add to FIFO
+	@param nbits	Number of bits to add to FIFO
+*/
 void Fifo::FlipPutBits(int32_t d, int nbits)
 {
 	int i;
@@ -314,6 +328,12 @@ void Fifo::FlipPutBits(int32_t d, int nbits)
 		m_max_fullness = m_fullness;
 }
 
+
+/** Get a datum value from a FIFO
+	@param nbits			Number of bits to get from FIFO
+	@param is_signed		Flag indicating whether to do sign extension for signed value
+	@param direction_r2l	Flag indicating to read datum values from right to left
+*/
 int32_t Fifo::GetDatum(int nbits, bool is_signed, bool direction_r2l)
 {
 	if (is_signed)
@@ -332,10 +352,24 @@ int32_t Fifo::GetDatum(int nbits, bool is_signed, bool direction_r2l)
 	}
 }
 
+/** Put a datum value into a FIFO
+	@param datum			The datum value to add to FIFO
+	@param nbits			Number of bits to add to FIFO
+	@param direction_r2l	Flg indicating to write datum values from right to left
+*/
 void Fifo::PutDatum(int32_t datum, int nbits, bool direction_r2l)
 {
 	if (direction_r2l)
 		FlipPutBits(datum, nbits);
 	else
 		PutBits(datum, nbits);
+}
+
+/** Clear a FIFO */
+void Fifo::Clear()
+{
+	m_fullness = 0;
+	m_read_ptr = m_write_ptr = 0;
+	m_max_fullness = 0;
+	m_byte_ctr = 0;
 }

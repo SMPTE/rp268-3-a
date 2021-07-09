@@ -30,9 +30,12 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 
-//! \file main.cpp  Defines the entry point for the console application.
-//
-//  These are wrapper functions for Win32 to be able to call the mainline in codec_main.c
+/** @file convert_descriptor.cpp
+	@brief Converts an RGB DPX file to a different order or to/from a planar format; optionally adds or remove alpha plane
+           (only works with non-floating point DPX files where all image elements have same bit depth)
+
+	This tool can change component order of a DPX file or change between planar and interleaved formats.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,7 +52,12 @@ using namespace std;
 
 int convert_descriptor(int argc, char ** argv);
 
-// returns number of TCHARs in string
+/**
+	Returns number of _TCHARs in string
+
+	@param wstr	input string
+	@return		number of _TCHARS in string
+*/
 int wstrlen(_TCHAR * wstr)
 {
 	int l_idx = 0;
@@ -58,7 +66,12 @@ int wstrlen(_TCHAR * wstr)
 }
 
 
-// Allocate char string and copy TCHAR->char->string
+/**
+	Allocate char string and copy _TCHAR->char->string
+
+	@param wSrc input string
+	@return		pointer to new char * string containing copy of input string
+*/
 char * wstrdup(_TCHAR * wSrc)
 {
 	int l_idx = 0;
@@ -76,8 +89,13 @@ char * wstrdup(_TCHAR * wSrc)
 
 
 
-// allocate argn structure parallel to argv
-// argn must be released
+/**
+	Allocate argn structure parallel to argv. argn must be released.
+
+	@param argc	number of arguments
+	@param argv	arguments as _TCHAR strings
+	@return		pointer to array of arguments as char strings
+*/
 char ** allocate_argn(int argc, _TCHAR* argv[])
 {
 	char ** l_argn = (char **)malloc(argc * sizeof(char*));
@@ -88,7 +106,12 @@ char ** allocate_argn(int argc, _TCHAR* argv[])
 	return l_argn;
 }
 
-// release argn and its content
+/**
+	Release argn and its allocated memory
+
+	@param argc number of arguments
+	@param nargv	pointer to array of arguments as char strings
+*/
 void release_argn(int argc, char ** nargv)
 {
 	for (int idx = 0; idx<argc; idx++) {
@@ -97,6 +120,14 @@ void release_argn(int argc, char ** nargv)
 	free(nargv);
 }
 
+
+/**
+	Entry point for Windows console app
+
+	@param argc	number of arguments
+	@param argv array of arguments (as _TCHAR strings)
+	@return		exit code
+*/
 int _tmain(int argc, _TCHAR* argv[])
 {
 	char ** argn = allocate_argn(argc, argv);
@@ -108,6 +139,12 @@ int _tmain(int argc, _TCHAR* argv[])
 }
 #endif
 
+/**
+	Prints to cerr a specified message along with the error log from the DPX file
+
+	@param logmessage	Message to include with the error log
+	@param f			HdrDpxFile associated with DPX file
+*/
 static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 {
 	Dpx::ErrorCode code;
@@ -123,6 +160,12 @@ static void dump_error_log(std::string logmessage, Dpx::HdrDpxFile &f)
 	}
 }
 
+/**
+	Return a 2-character string that shows the hex value of a byte (equivalent to sprintf(s,"%02x))
+
+	@param v			Byte value to convert
+	@return				String representation of byte
+*/
 inline string tohex(uint8_t v)
 {
 	stringstream ss;
@@ -134,6 +177,13 @@ inline string tohex(uint8_t v)
 	return ss.str();
 }
 
+/** 
+	Compare two descriptors. If a datum at the specified index in the first descriptor is found in the 2nd, return the index in the 2nd. 
+	@param[in] destdesc			Reference descriptor
+	@param[in] srcdesc			Descriptor to search
+	@param[in] datum			Index within reference descriptor to look for
+	@param[out] foundpos		Index where descriptor was found (if found)
+	@return						true if found, false if not found */
 bool compare_datum_desc(Dpx::HdrDpxDescriptor destdesc, Dpx::HdrDpxDescriptor srcdesc, int datum, int &foundpos)
 {
 	std::vector<Dpx::DatumLabel> dl_src = Dpx::DescriptorToDatumList(srcdesc);
@@ -149,6 +199,12 @@ bool compare_datum_desc(Dpx::HdrDpxDescriptor destdesc, Dpx::HdrDpxDescriptor sr
 	return false;
 }
 
+/**
+	Build a mapping from one or more source descriptors to a destination descriptor
+	@param[in] dest					Destination descriptor
+	@param[in] srclist				List source descriptors
+	@param[out] matching_ie			List of IE indexes (one for each datum in the destination descriptor)
+	@param[out] matching_component	List of component indexes within source IEs (one for each datum in the destination descriptor) */
 void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescriptor> srclist, std::vector<int> &matching_ie, std::vector<int> &matching_component)
 {
 	std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest);
@@ -175,9 +231,6 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 // Usage:
 //  convert_descriptor input.dpx output.dpx <neworder> <planar>
 //
-//  Converts an RGB DPX file to a different order or to/from a planar format; optionally adds or remove alpha plane
-//   (only works with non-floating point DPX files where all image elements have same bit depth)
-//
 // Desc types:
 //   BGR
 //   BGRA
@@ -185,6 +238,10 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 //   RGB
 //   RGBA
 //   ABGR
+/**
+	Main program
+	@param argc					Number of arguments
+	@param argv					Array of argument strings */
 #ifdef _MSC_VER
 int convert_descriptor(int argc, char ** argv)
 #else
