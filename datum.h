@@ -30,6 +30,8 @@
 *  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ***************************************************************************/
 #pragma once
+/** @file datum.h
+	@brief Defines datum labels used in DPX files. */
 
 #ifndef DATUM_H
 #define DATUM_H
@@ -37,10 +39,30 @@
 
 namespace Dpx {
 
+	/** List of datum labels */
 	enum DatumLabel {
-		DATUM_UNSPEC, DATUM_R, DATUM_G, DATUM_B, DATUM_A, DATUM_Y, DATUM_CB, DATUM_CR, DATUM_Z, DATUM_COMPOSITE, DATUM_A2, DATUM_Y2, DATUM_C,
-		DATUM_UNSPEC2, DATUM_UNSPEC3, DATUM_UNSPEC4, DATUM_UNSPEC5, DATUM_UNSPEC6, DATUM_UNSPEC7, DATUM_UNSPEC8, DATUM_SIZE
-	};
+		DATUM_UNSPEC,		///< Unspecified component
+		DATUM_R,			///< Red
+		DATUM_G,			///< Green
+		DATUM_B,			///< Blue
+		DATUM_A,			///< Alpha
+		DATUM_Y,			///< Luma
+		DATUM_CB,			///< Cb
+		DATUM_CR,			///< Cr
+		DATUM_Z,			///< Z (depth)
+		DATUM_COMPOSITE,	///< Composite
+		DATUM_A2,			///< Alpha (2nd sample)
+		DATUM_Y2,			///< Luma (2nd sample)
+		DATUM_C,			///< Cb (even lines)/Cr (odd lines)
+		DATUM_UNSPEC2,		///< Unspecified 2nd component
+		DATUM_UNSPEC3,		///< Unspecified 3rd component
+		DATUM_UNSPEC4,		///< Unspecified 4th component
+		DATUM_UNSPEC5,		///< Unspecified 5th component
+		DATUM_UNSPEC6,		///< Unspecified 6th component
+		DATUM_UNSPEC7,		///< Unspecified 7th component
+		DATUM_UNSPEC8,		///< Unspecified 8th component
+		DATUM_SIZE			///< Not used
+	}; 
 
 	static std::string DatumLabelToName[] =
 	{
@@ -64,7 +86,7 @@ namespace Dpx {
 		"Unspecified(6)",
 		"Unspecified(7)",
 		"Unspecified(8)"
-	};
+	};  ///< String representation of each datum label
 
 
 }
