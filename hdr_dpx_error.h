@@ -76,7 +76,7 @@ namespace Dpx {
 			Dpx::ErrorCode code;
 			Dpx::ErrorSeverity severity;
 			std::string message;
-			int i;
+			unsigned int i;
 
 			for (i = 0; i < GetNumErrors(); ++i)
 			{
@@ -97,7 +97,7 @@ namespace Dpx {
 			Dpx::ErrorCode code;
 			Dpx::ErrorSeverity severity;
 			std::string message;
-			int i;
+			unsigned int i;
 
 			for (i = 0; i < obj.GetNumErrors(); ++i)
 			{
@@ -123,7 +123,7 @@ namespace Dpx {
 			@param[out] errcode			returns the error code
 			@param[out] severity		returns the error severity
 			@param[out] errmsg			returns the error message */
-		void GetError(int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
+		void GetError(unsigned int index, Dpx::ErrorCode &errcode, Dpx::ErrorSeverity &severity, std::string &errmsg) const
 		{
 			if (index >= m_code.size())
 			{
@@ -136,9 +136,9 @@ namespace Dpx {
 			errmsg = m_message[index];
 		}
 		/** Returns the number of errors that have been logged */
-		int GetNumErrors() const
+		unsigned int GetNumErrors() const
 		{
-			return static_cast<int>(m_severity.size());
+			return static_cast<unsigned int>(m_severity.size());
 		}
 		/** Returns the worst severity level among the errors that have been logged */
 		Dpx::ErrorSeverity GetWorstSeverity() const

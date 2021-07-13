@@ -59,29 +59,10 @@
 
 using namespace Dpx;
 
-static int g_HdrDpxStringLengths[] =
-{
-	FILE_NAME_SIZE,
-	TIMEDATE_SIZE,
-	CREATOR_SIZE,
-	PROJECT_SIZE,
-	COPYRIGHT_SIZE,
-	FILE_NAME_SIZE,
-	TIMEDATE_SIZE,
-	INPUTNAME_SIZE,
-	2,
-	2,
-	4,
-	6,
-	4,
-	32,
-	32,
-	100
-};
 
-bool Dpx::CopyStringN(char *dest, std::string src, int max_length)
+bool Dpx::CopyStringN(char *dest, std::string src, unsigned int max_length)
 {
-	for (int idx = 0; idx < max_length; ++idx)
+	for (unsigned int idx = 0; idx < max_length; ++idx)
 	{
 		if (idx >= src.length())
 			*(dest++) = '\0';
@@ -91,11 +72,11 @@ bool Dpx::CopyStringN(char *dest, std::string src, int max_length)
 	return (src.length() > max_length);  // return true if the string is longer than the field
 }
 
-std::string Dpx::CopyToStringN(const char *src, int max_length) 
+std::string Dpx::CopyToStringN(const char *src, unsigned int max_length) 
 {
 	std::string s("");
 
-	for (int idx = 0; idx < max_length; ++idx)
+	for (unsigned int idx = 0; idx < max_length; ++idx)
 	{
 		if (*src == '\0')
 			return s;
@@ -814,12 +795,12 @@ std::string HdrDpxFile::DumpHeader() const
 }
 
 
-static bool IsStringAllFs(std::string s, const int max_size)
+static bool IsStringAllFs(std::string s, const unsigned int max_size)
 {
 	if (s.length() < max_size)
 		return false;
-	for (int i = 0; i < max_size; ++i)
-		if (s[i] != (char)-1)
+	for (unsigned int i = 0; i < max_size; ++i)
+		if (s[i] != (char)UINT8_MAX)
 			return false;
 	return true;
 }

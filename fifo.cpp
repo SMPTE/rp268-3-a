@@ -202,7 +202,6 @@ uint32_t Fifo::FlipGetBitsUi(int n)
 	unsigned int d = 0;
 	int i;
 	unsigned char b;
-	int sign = 0;
 
 	ASSERT_MSG(m_fullness >= n, "FIFO has underflowed");
 

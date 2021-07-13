@@ -1404,12 +1404,12 @@ namespace Dpx {
 		@param[in] src				Source string
 		@param[in] field_length		Maximum number of bytes to copy
 		@return						true if string was clipped to fit into buffer */
-	bool CopyStringN(char *dest, std::string src, int field_length);
+	bool CopyStringN(char *dest, std::string src, unsigned int field_length);
 	/** Copy a char * buffer with a specified max length to a string
 		@param src					Buffer to copy from
 		@param field_length			Maximum size of string
 		@return						string containing copied characters */
-	std::string CopyToStringN(const char * src, int field_length);
+	std::string CopyToStringN(const char * src, unsigned int field_length);
 
 	
 	/** Generic 32-bit byte swap

@@ -189,7 +189,7 @@ bool compare_datum_desc(Dpx::HdrDpxDescriptor destdesc, Dpx::HdrDpxDescriptor sr
 	std::vector<Dpx::DatumLabel> dl_src = Dpx::DescriptorToDatumList(srcdesc);
 	std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(destdesc);
 
-	for (int i = 0; i < dl_dest.size(); ++i)
+	for (unsigned int i = 0; i < dl_dest.size(); ++i)
 		if (dl_dest[datum] == dl_src[i])
 		{
 			foundpos = i;
@@ -208,15 +208,15 @@ bool compare_datum_desc(Dpx::HdrDpxDescriptor destdesc, Dpx::HdrDpxDescriptor sr
 void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescriptor> srclist, std::vector<int> &matching_ie, std::vector<int> &matching_component)
 {
 	std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest);
-	int foundpos;
+	int foundpos = 0;
 
 	matching_ie.resize(dl_dest.size());
 	matching_component.resize(dl_dest.size());
-	for (int i = 0; i < dl_dest.size(); ++i)
+	for (unsigned int i = 0; i < dl_dest.size(); ++i)
 		matching_ie[i] = -1;					// -1 means not found
-	for (int i = 0; i < dl_dest.size(); ++i)
+	for (unsigned int i = 0; i < dl_dest.size(); ++i)
 	{
-		for (int j = 0; j < srclist.size(); ++j)
+		for (unsigned int j = 0; j < srclist.size(); ++j)
 		{
 			if (compare_datum_desc(dest, srclist[j], i, foundpos))
 			{
@@ -310,7 +310,7 @@ int main(int argc, char *argv[])
 	std::vector<Dpx::HdrDpxDescriptor> dest_ie_desc_list;
 	if (planar)
 	{
-		for (int idx = 0; idx < order.length(); ++idx)
+		for (unsigned int idx = 0; idx < order.length(); ++idx)
 		{
 			if (order.substr(idx, 1) == "R")
 				dest_ie_desc_list.push_back(Dpx::eDescR);

@@ -390,8 +390,9 @@ std::string HdrDpxImageElement::DatumLabelToName(Dpx::DatumLabel dl) const
 		return "Unspec7";
 	case DATUM_UNSPEC8:
 		return "Unspec8";
+	default:
+		return "Unrecognized";
 	}
-	return "Unrecognized";
 }
 
 HdrDpxImageElement::HdrDpxImageElement() : m_fifo(16)
@@ -562,7 +563,6 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
 		return;
 	}
 	
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_int_row = datum_ptr;
 	ReadRow(row);
@@ -587,7 +587,6 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, float *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_float_row = datum_ptr;
 	ReadRow(row);
@@ -612,7 +611,6 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_double_row = datum_ptr;
 	ReadRow(row);
@@ -1003,7 +1001,6 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_int_row = datum_ptr;
 	WriteRow(row);
@@ -1028,7 +1025,6 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, float *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_float_row = datum_ptr;
 	WriteRow(row);
@@ -1053,7 +1049,6 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *datum_ptr)
 		return;
 	}
 
-	uint8_t num_components = GetNumberOfComponents();
 
 	m_double_row = datum_ptr;
 	WriteRow(row);
@@ -1064,13 +1059,10 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	uint32_t xpos;
 	int component;
 	int num_components;
-	bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
 	uint32_t run_length = 0;
-	bool freeze_increment = false;
 	unsigned int max_run;
 	bool run_type;
 	int32_t rle_pixel[8];
-	uint32_t row_wr_idx;
 	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
 
 	m_fifo.Clear();
@@ -1120,7 +1112,6 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	xpos = 0;
 
 	// write
-	row_wr_idx = 0;
 	m_row_rd_idx = 0;
 	xpos = 0;
 	while (xpos < m_width)
