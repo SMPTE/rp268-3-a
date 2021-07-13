@@ -849,7 +849,6 @@ int main(int argc, char *argv[])
 				else
 				{
 					std::vector<int32_t> rowdata;
-					int32_t datum_idx = 0;
 					rowdata.resize(ie->GetRowSizeInDatums());
 					ie->Dpx2AppPixels(row, static_cast<int32_t *>(rowdata.data()));
 					for (uint32_t column = 0; column < ie->GetWidth(); ++column)
