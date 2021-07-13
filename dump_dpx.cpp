@@ -231,8 +231,14 @@ std::string datum_label_to_ext(Dpx::DatumLabel dl, uint8_t chroma_idx)
 		return "g7";
 	case Dpx::DATUM_UNSPEC8:
 		return "g8";
+	// The following aren't needed but included for completeness:
+	case Dpx::DATUM_A2:
+		return "a2";
+	case Dpx::DATUM_Y2:
+		return "y2";
+	default:
+		return "unk";
 	}
-	return "unk";
 }
 
 
@@ -311,7 +317,7 @@ void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8
 	{
 		std::vector<float> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = static_cast<float>(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in));
 		}
@@ -321,7 +327,7 @@ void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8
 	{
 		std::vector<double> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = (int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in));
 		}
@@ -332,7 +338,7 @@ void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8
 	{
 		std::vector<uint16_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = norm_double_to_uint(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
 		}
@@ -342,7 +348,7 @@ void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8
 	{
 		std::vector<uint8_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
 		}
@@ -373,7 +379,7 @@ void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t
 	{
 		std::vector<float> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = rowdata[x * num_components + datum_offset];
 		}
@@ -383,7 +389,7 @@ void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t
 	{
 		std::vector<double> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = rowdata[x * num_components + datum_offset];
 		}
@@ -394,7 +400,7 @@ void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t
 	{
 		std::vector<uint16_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma);
 		}
@@ -404,7 +410,7 @@ void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t
 	{
 		std::vector<uint8_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma));
 		}
@@ -435,7 +441,7 @@ void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_
 	{
 		std::vector<float> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = static_cast<float>(rowdata[x * num_components + datum_offset]);
 		}
@@ -445,7 +451,7 @@ void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_
 	{
 		std::vector<double> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = rowdata[x * num_components + datum_offset];
 		}
@@ -456,7 +462,7 @@ void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_
 	{
 		std::vector<uint16_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma);
 		}
@@ -466,7 +472,7 @@ void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_
 	{
 		std::vector<uint8_t> outrow;
 		outrow.resize(rowdata.size() / num_components);
-		for (int x = 0; x < rowdata.size() / num_components; ++x)
+		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
 		{
 			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma));
 		}
@@ -621,7 +627,6 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 	std::shared_ptr<std::ofstream> first_y_fp = NULL;
 	std::shared_ptr<std::ofstream> first_a_fp = NULL;
 	std::shared_ptr<std::ofstream> new_fp = NULL;
-	int i = 0;
 
 	alt_chroma = UNDEFINED_U8;
 	for (auto c : dl_list)
@@ -753,7 +758,7 @@ int main(int argc, char *argv[])
 	{
 
 		std::cout << "User data (hex bytes):\n";
-		for (int i = 0; i < userdata.size(); ++i)
+		for (unsigned int i = 0; i < userdata.size(); ++i)
 		{
 			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(userdata[i]) << " ";
 			if ((i & 0xf) == 0xf)
@@ -771,7 +776,7 @@ int main(int argc, char *argv[])
 		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
 		{
 			std::cout << "ST336 (KLV) hex bytes:\n";
-			for (int i = 0; i < sbmdata.size(); ++i)
+			for (unsigned int i = 0; i < sbmdata.size(); ++i)
 			{
 				std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(sbmdata[i]) << " ";
 				if ((i & 0xf) == 0xf)
