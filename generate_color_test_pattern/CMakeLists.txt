@@ -2,9 +2,19 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(generate_color_test_pattern)
+# Do not select the toolchain until the system name is available
+project(generate_color_test_pattern NONE)
 
-# The parent directory is the root of this software project
+# The system name is set by the project line above
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+	set(CMAKE_C_COMPILER "gcc-10")
+	set(CMAKE_CXX_COMPILER "g++-10")
+endif ()
+
+# Enable use of C and C++ after the toolchain has been selected
+enable_language(C CXX)
+
+# The location of the top-level directory for this project
 set(ROOT ${CMAKE_SOURCE_DIR}/..)
 
 set(CMAKE_BUILD_TYPE DEBUG)
@@ -34,16 +44,13 @@ source_group("Sources" FILES ${sources})
 # Define the source files for building the color test pattern generator
 add_executable(generate_color_test_pattern ${sources})
 
-# Link in the standard math library
-IF(NOT WIN32)
-target_link_libraries(generate_color_test_pattern m)
-ENDIF(NOT WIN32)
-
-# Add target for removing all files created by CMake
-add_custom_target(clean-cmake-files COMMAND ${CMAKE_COMMAND} -P clean-all.cmake)
+IF(NOT MSVC)
+  # Link in the standard math library
+  target_link_libraries(generate_color_test_pattern m)
+ENDIF(NOT MSVC)
 
 # Add target for removing all build products and the files created by running CMake
 add_custom_target(clean-all
    COMMAND ${CMAKE_BUILD_TOOL} clean
-   COMMAND ${CMAKE_COMMAND} -P clean-all.cmake
+   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/clean-all.cmake
 )
