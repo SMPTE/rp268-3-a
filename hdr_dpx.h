@@ -58,6 +58,9 @@
 #define RLE_MARGIN   (1.0/127)   // = ~1% margin means we assume that in the worst case an RLE image element might be slightly bigger than uncompressed 
                                   //         (1-component 8-bit IE where RLE flag always indicates no redundancy should be worst case if we require "same" runs to be at least 3 long for 1-component IE case)
 
+/** Round an offset up to a 4-byte (DWORD) boundar */
+#define CEIL_DWORD(o)    (((o + 3)>>2)<<2)
+
 #ifndef DPX_H
 
 #ifdef _MSC_VER
@@ -541,7 +544,7 @@ namespace Dpx {
 	{
 		eDataSignUnsigned = 0,   ///< indicates samples are unsigned
 		eDataSignSigned = 1,    ///< indicates samples are signed
-		eDataSignUndefined = UINT8_MAX   ///< data sign undefined
+		eDataSignUndefined = UINT32_MAX   ///< data sign undefined
 	};
 
 	/// Settings for descriptor
@@ -1370,6 +1373,10 @@ namespace Dpx {
 
 	private:
 		//friend class HdrDpxImageElement;
+		/** Clear header or just IE data structure
+			@param ie_index				IE index (if specified, only clears the corresponding IE header; if unspecified, clears the entire DPX header) */
+		void ClearHeader(uint8_t ie_index = 0xff);
+
 		HdrDpxImageElement m_IE[8];  ///< Array of image element objects
 		void ByteSwapHeader(void);   ///< Byte swap the header fields
 		void ByteSwapSbmHeader(void);   ///< Byte swap the standards-based metadata fields

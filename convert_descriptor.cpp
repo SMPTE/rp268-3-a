@@ -47,97 +47,6 @@
 
 using namespace std;
 
-#ifdef _MSC_VER
-#include <tchar.h>
-
-int convert_descriptor(int argc, char ** argv);
-
-/**
-	Returns number of _TCHARs in string
-
-	@param wstr	input string
-	@return		number of _TCHARS in string
-*/
-int wstrlen(_TCHAR * wstr)
-{
-	int l_idx = 0;
-	while (((char*)wstr)[l_idx] != 0) l_idx += 2;
-	return l_idx;
-}
-
-
-/**
-	Allocate char string and copy _TCHAR->char->string
-
-	@param wSrc input string
-	@return		pointer to new char * string containing copy of input string
-*/
-char * wstrdup(_TCHAR * wSrc)
-{
-	int l_idx = 0;
-	int l_len = wstrlen(wSrc);
-	char * l_nstr = (char*)malloc(l_len);
-	if (l_nstr) {
-		do {
-			l_nstr[l_idx] = (char)wSrc[l_idx];
-			l_idx++;
-		} while ((char)wSrc[l_idx] != 0);
-		l_nstr[l_idx] = 0;
-	}
-	return l_nstr;
-}
-
-
-
-/**
-	Allocate argn structure parallel to argv. argn must be released.
-
-	@param argc	number of arguments
-	@param argv	arguments as _TCHAR strings
-	@return		pointer to array of arguments as char strings
-*/
-char ** allocate_argn(int argc, _TCHAR* argv[])
-{
-	char ** l_argn = (char **)malloc(argc * sizeof(char*));
-	assert(l_argn != NULL);
-	for (int idx = 0; idx<argc; idx++) {
-		l_argn[idx] = wstrdup(argv[idx]);
-	}
-	return l_argn;
-}
-
-/**
-	Release argn and its allocated memory
-
-	@param argc number of arguments
-	@param nargv	pointer to array of arguments as char strings
-*/
-void release_argn(int argc, char ** nargv)
-{
-	for (int idx = 0; idx<argc; idx++) {
-		free(nargv[idx]);
-	}
-	free(nargv);
-}
-
-
-/**
-	Entry point for Windows console app
-
-	@param argc	number of arguments
-	@param argv array of arguments (as _TCHAR strings)
-	@return		exit code
-*/
-int _tmain(int argc, _TCHAR* argv[])
-{
-	char ** argn = allocate_argn(argc, argv);
-
-	convert_descriptor(argc, argn);
-
-	release_argn(argc, argn);
-	return(0);
-}
-#endif
 
 /**
 	Prints to cerr a specified message along with the error log from the DPX file
@@ -242,11 +151,7 @@ void build_datum_map(Dpx::HdrDpxDescriptor dest, std::vector<Dpx::HdrDpxDescript
 	Main program
 	@param argc					Number of arguments
 	@param argv					Array of argument strings */
-#ifdef _MSC_VER
-int convert_descriptor(int argc, char ** argv)
-#else
 int main(int argc, char *argv[])
-#endif
 {
 	if (argc < 5)
 	{

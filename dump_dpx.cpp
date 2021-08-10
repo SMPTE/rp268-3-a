@@ -46,99 +46,6 @@
 
 using namespace std;
 
-// The code in the following #ifdef is needed for Windows to convert the _TCHAR arguments to char 
-#ifdef _MSC_VER
-#include <tchar.h>
-
-int dump_dpx(int argc, char **argv);
-
-
-/**
-	Returns number of _TCHARs in string
-
-	@param wstr	input string
-	@return		number of _TCHARS in string
-*/
-int wstrlen(_TCHAR * wstr)
-{
-    int l_idx = 0;
-    while (((char*)wstr)[l_idx]!=0) l_idx+=2;
-    return l_idx;
-}
-
-
-/**
-	Allocate char string and copy _TCHAR->char->string
-
-	@param wSrc input string
-	@return		pointer to new char * string containing copy of input string
-*/
-char * wstrdup(_TCHAR * wSrc)
-{
-    int l_idx=0;
-    int l_len = wstrlen(wSrc);
-    char * l_nstr = (char*)malloc(l_len);
-    if (l_nstr) {
-        do {
-           l_nstr[l_idx] = (char)wSrc[l_idx];
-           l_idx++;
-        } while ((char)wSrc[l_idx]!=0);
-	    l_nstr[l_idx] = 0;
-    }
-    return l_nstr;
-}
- 
-  
-/** 
-	Allocate argn structure parallel to argv. argn must be released.
-
-	@param argc	number of arguments
-	@param argv	arguments as _TCHAR strings
-	@return		pointer to array of arguments as char strings
-*/
-char ** allocate_argn (int argc, _TCHAR* argv[])
-{
-    char ** l_argn = (char **)malloc(argc * sizeof(char*));
-	assert(l_argn != NULL);
-    for (int idx=0; idx<argc; idx++) {
-        l_argn[idx] = wstrdup(argv[idx]);
-    }
-    return l_argn;
-}
-
-
-/**
-	Release argn and its allocated memory
-
-	@param argc number of arguments
-	@param nargv	pointer to array of arguments as char strings
-*/
-void release_argn(int argc, char ** nargv)
-{
-    for (int idx=0; idx<argc; idx++) {
-        free(nargv[idx]);
-    }
-    free(nargv);
-}
-
-
-/**
-	Entry point for Windows console app
-
-	@param argc	number of arguments
-	@param argv array of arguments (as _TCHAR strings)
-	@return		exit code
-*/
-int _tmain(int argc, _TCHAR* argv[])
-{
-	char ** argn = allocate_argn(argc, argv);
-
-	dump_dpx(argc, argn);
-
-	release_argn(argc, argn);
-	return(0);
-}
-#endif
 
 
 /**
@@ -294,195 +201,6 @@ inline uint16_t norm_double_to_uint(double f, uint8_t bits, bool full_range, boo
 
 
 /**
-	Write a row of integer samples to a file
-
-	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
-	@param datum_offset		Offset within rowdata where first sample of desired component is located
-	@param num_components	Number of components (samples) for each pixel
-	@param bit_depth_in		The bit depth of the integer samples in rowdata
-	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
-	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
-	@param lowcode			Low code value.
-	@param is_signed		Flag indicating whether the samples are signed
-	@param write_full_range	Flag indicating the samples should be written as full range
-	@param is_chroma		Flag indicating that the samples being written are chroma samples
-	@param raw_fp			ofstream object to write to (assumed to be open & valid)
-*/
-void write_row_to_file(std::vector<int32_t> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool is_signed, bool write_full_range, bool is_chroma, ofstream &raw_fp)
-{
-	if (bit_depth_conv == 0)
-		bit_depth_conv = bit_depth_in;
-
-	if (bit_depth_conv == 32)
-	{
-		std::vector<float> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = static_cast<float>(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in));
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(float) * outrow.size());
-	}
-	else if (bit_depth_conv == 64)
-	{
-		std::vector<double> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = (int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in));
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(double) * outrow.size());
-	}
-	// Converts to integer (unsigned) format
-	else if (bit_depth_conv > 8)
-	{
-		std::vector<uint16_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = norm_double_to_uint(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint16_t) * outrow.size());
-	}
-	else
-	{
-		std::vector<uint8_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata[x * num_components + datum_offset], is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint8_t) * outrow.size());
-	}
-
-}
-
-
-/**
-	Write a row of 32-bit floating point samples to a file
-
-	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
-	@param datum_offset		Offset within rowdata where first sample of desired component is located
-	@param num_components	Number of components (samples) for each pixel
-	@param bit_depth_conv	If different from 32, samples are converted to a bit depth of bit_depth_conv before writing
-	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
-	@param lowcode			Low code value.
-	@param write_full_range	Flag indicating the samples should be written as full range
-	@param is_chroma		Flag indicating that the samples being written are chroma samples
-	@param raw_fp			ofstream object to write to (assumed to be open & valid)
-*/
-void write_row_to_file(std::vector<float> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, ofstream &raw_fp)
-{
-
-	// Just passes through to float / double formats
-	if (bit_depth_conv == 32 || bit_depth_conv == 0)
-	{
-		std::vector<float> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = rowdata[x * num_components + datum_offset];
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(float) * outrow.size());
-	}
-	else if (bit_depth_conv == 64)
-	{
-		std::vector<double> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = rowdata[x * num_components + datum_offset];
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(double) * outrow.size());
-	}
-	// Converts to integer (unsigned) format
-	else if (bit_depth_conv > 8)
-	{
-		std::vector<uint16_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma);
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint16_t) * outrow.size());
-	}
-	else
-	{
-		std::vector<uint8_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma));
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint16_t) * outrow.size());
-	}
-
-}
-
-
-/**
-	Write a row of 64-bit floating point samples to a file
-
-	@param rowdata			vector containing FP64 sample array. There are num_components samples for each pixel.
-	@param datum_offset		Offset within rowdata where first sample of desired component is located
-	@param num_components	Number of components (samples) for each pixel
-	@param bit_depth_conv	If different from 64, samples are converted to a bit depth of bit_depth_conv before writing
-	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
-	@param lowcode			Low code value.
-	@param write_full_range	Flag indicating the samples should be written as full range
-	@param is_chroma		Flag indicating that the samples being written are chroma samples
-	@param raw_fp			ofstream object to write to (assumed to be open & valid)
-*/
-void write_row_to_file(std::vector<double> rowdata, uint8_t datum_offset, uint8_t num_components, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, ofstream &raw_fp)
-{
-
-	// Just passes through to float / double formats
-	if (bit_depth_conv == 32)
-	{
-		std::vector<float> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = static_cast<float>(rowdata[x * num_components + datum_offset]);
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(float) * outrow.size());
-	}
-	else if (bit_depth_conv == 64 || bit_depth_conv == 0)
-	{
-		std::vector<double> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = rowdata[x * num_components + datum_offset];
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(double) * outrow.size());
-	}
-	// Converts to integer (unsigned) format
-	else if (bit_depth_conv > 8)
-	{
-		std::vector<uint16_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma);
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint16_t) * outrow.size());
-	}
-	else
-	{
-		std::vector<uint8_t> outrow;
-		outrow.resize(rowdata.size() / num_components);
-		for (unsigned int x = 0; x < rowdata.size() / num_components; ++x)
-		{
-			outrow[x] = static_cast<uint8_t>(norm_double_to_uint(rowdata[x * num_components + datum_offset], bit_depth_conv, write_full_range, is_chroma));
-		}
-		raw_fp.write((char *)outrow.data(), sizeof(uint16_t) * outrow.size());
-	}
-
-}
-
-
-/**
 	Write a single 32-bit floating point sample to a file
 
 	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
@@ -512,13 +230,13 @@ void write_raw_datum(float rowdata, uint8_t bit_depth_conv, float hicode, float 
 	else if (bit_depth_conv > 8)
 	{
 		uint16_t out;
-		out = norm_double_to_uint(rowdata, bit_depth_conv, write_full_range, is_chroma);
+		out = norm_double_to_uint((rowdata - lowcode) / (hicode - lowcode), bit_depth_conv, write_full_range, is_chroma);
 		raw_fp->write((char *)&out, sizeof(uint16_t));
 	}
 	else
 	{
 		uint8_t out;
-		out = static_cast<uint8_t>(norm_double_to_uint(rowdata, bit_depth_conv, write_full_range, is_chroma));
+		out = static_cast<uint8_t>(norm_double_to_uint((rowdata - lowcode) / (hicode - lowcode), bit_depth_conv, write_full_range, is_chroma));
 		raw_fp->write((char *)&out, sizeof(uint8_t));
 	}
 }
@@ -554,13 +272,13 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 	else if (bit_depth_conv > 8)
 	{
 		uint16_t out;
-		out = norm_double_to_uint(rowdata, bit_depth_conv, write_full_range, is_chroma);
+		out = norm_double_to_uint((rowdata - lowcode) / (hicode - lowcode), bit_depth_conv, write_full_range, is_chroma);
 		raw_fp->write((char *)&out, sizeof(uint16_t));
 	}
 	else
 	{
 		uint8_t out;
-		out = static_cast<uint8_t>(norm_double_to_uint(rowdata, bit_depth_conv, write_full_range, is_chroma));
+		out = static_cast<uint8_t>(norm_double_to_uint((rowdata - lowcode) / (hicode - lowcode), bit_depth_conv, write_full_range, is_chroma));
 		raw_fp->write((char *)&out, sizeof(uint8_t));
 	}
 }
@@ -668,14 +386,10 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 	@param argv		Array of char strings, each containing one command-line argument
 	@return			Error code
 */
-#ifdef _MSC_VER
-int dump_dpx(int argc, char **argv)
-#else
 int main(int argc, char *argv[])
-#endif
 {
 	// Configuration variables:
-	int bit_depth_conv = 0;
+	uint8_t bit_depth_conv = 0;
 	std::string plane_order;
 	bool output_raw = false;
 	std::string raw_base_name;
@@ -714,7 +428,7 @@ int main(int argc, char *argv[])
 		}
 		else if (!arg.compare("-bit_depth_conv"))
 		{
-			bit_depth_conv = atoi(argv[++i]);
+			bit_depth_conv = static_cast<uint8_t>(atoi(argv[++i]));
 		}
 		else if (!arg.compare("-dump_full_range"))
 		{

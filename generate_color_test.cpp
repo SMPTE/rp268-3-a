@@ -51,101 +51,6 @@
 using namespace std;
 
 
-#ifdef _MSC_VER
-#include <tchar.h>
-
-
-int generate_color_test(int argc, char *argv[]);
-
-/**
-	Returns number of _TCHARs in string
-
-	@param wstr	input string
-	@return		number of _TCHARS in string
-*/
-int wstrlen(_TCHAR * wstr)
-{
-    int l_idx = 0;
-    while (((char*)wstr)[l_idx]!=0) l_idx+=2;
-    return l_idx;
-}
-
-  
-/**
-	Allocate char string and copy _TCHAR->char->string
-
-	@param wSrc input string
-	@return		pointer to new char * string containing copy of input string
-*/
-char * wstrdup(_TCHAR * wSrc)
-{
-    int l_idx=0;
-    int l_len = wstrlen(wSrc);
-    char * l_nstr = (char*)malloc(l_len);
-    if (l_nstr) {
-        do {
-           l_nstr[l_idx] = (char)wSrc[l_idx];
-           l_idx++;
-        } while ((char)wSrc[l_idx]!=0);
-	    l_nstr[l_idx] = 0;
-    }
-    return l_nstr;
-}
- 
-  
- 
-/**
-	Allocate argn structure parallel to argv. argn must be released.
-
-	@param argc	number of arguments
-	@param argv	arguments as _TCHAR strings
-	@return		pointer to array of arguments as char strings
-*/
-char ** allocate_argn (int argc, _TCHAR* argv[])
-{
-    char ** l_argn = (char **)malloc(argc * sizeof(char*));
-	assert(l_argn != NULL);
-    for (int idx=0; idx<argc; idx++) {
-        l_argn[idx] = wstrdup(argv[idx]);
-    }
-    return l_argn;
-}
- 
-
-/**
-	Release argn and its allocated memory
-
-	@param argc number of arguments
-	@param nargv	pointer to array of arguments as char strings
-*/
-void release_argn(int argc, char ** nargv)
-{
-    for (int idx=0; idx<argc; idx++) {
-        free(nargv[idx]);
-    }
-    free(nargv);
-}
-
-
-/**
-	Entry point for Windows console app
-
-	@param argc	number of arguments
-	@param argv array of arguments (as _TCHAR strings)
-	@return		exit code
-*/
-int _tmain(int argc, _TCHAR* argv[])
-{
-	char ** argn = allocate_argn(argc, argv);
-
-	generate_color_test(argc, argn);
-
-	release_argn(argc, argn);
-	return(0);
-}
-#endif
-
-
 /**
 	Prints to cerr a specified message along with the error log from the DPX file
 
@@ -890,11 +795,7 @@ private:
 /** Main program 
 	@param argc				Number of arguments
 	@param argv				Arguments */
-#ifdef _MSC_VER
-int generate_color_test(int argc, char *argv[])
-#else
 int main(int argc, char *argv[])
-#endif
 {
 	Dpx::ErrorObject err;
 	std::string fname = "colorbar.dpx";
@@ -1050,6 +951,17 @@ int main(int argc, char *argv[])
 			return 1;
 		}
 
+		if (usefullrange)
+		{
+			ie->SetHeader(Dpx::eReferenceLowDataCode, 0);
+			ie->SetHeader(Dpx::eReferenceHighDataCode, static_cast<float>((1 << bpc) - 1));
+		}
+		else  // Limited range
+		{
+			ie->SetHeader(Dpx::eReferenceLowDataCode, static_cast<float>(16 << (bpc - 8)));
+			ie->SetHeader(Dpx::eReferenceHighDataCode, static_cast<float>(235 << (bpc - 8)));
+		}
+
 		ie->SetHeader(Dpx::eDescriptor, static_cast<Dpx::HdrDpxDescriptor>(iemap.GetDescriptor(ie_idx).descriptor));
 		ie->SetHeader(Dpx::eEncoding, rle_encoding);
 		ie->SetHeader(Dpx::ePacking, packing);
@@ -1081,14 +993,14 @@ int main(int argc, char *argv[])
 	// Set header values as desired (defaults assumed based on image element structure)
 	dpxf.SetHeader(Dpx::eRightToUseOrCopyright, "(C) 20XX Not a real copyright");  // Key is a string, value matches data type
 	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
-	if (dpxf.Validate())
-	{
-		dump_error_log("Validation errors:\n", dpxf);
-	}
 
 
 	// Start writing file
 	dpxf.OpenForWriting(fname);
+	if (dpxf.Validate())
+	{
+		dump_error_log("Validation errors:\n", dpxf);
+	}
 	if (!dpxf.IsOk())
 	{
 		dump_error_log("File write message log:\n", dpxf);

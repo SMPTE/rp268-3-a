@@ -37,6 +37,8 @@
 #include <cmath>
 #include "hdr_dpx.h"
 
+#define WARN_FOR_ALL_FF_STRINGS  1
+
 #ifdef NDEBUG
 #define ASSERT_MSG(condition, msg) 0
 #else
@@ -108,7 +110,7 @@ HdrDpxFile::HdrDpxFile()
 	} u;
 	u.u32 = 0x12345678;
 	m_machine_is_msbf = (u.u32 == 0x12);
-	memset(&m_dpx_header, 0xff, sizeof(HDRDPXFILEFORMAT));
+	ClearHeader();
 }
 
 HdrDpxFile::~HdrDpxFile()
@@ -134,6 +136,12 @@ void HdrDpxFile::OpenForReading(std::string filename)
 	}
 	m_file_stream.read((char *)&m_dpx_header, sizeof(HDRDPXFILEFORMAT));
 	bool swapped = ByteSwapToMachine();
+	if (m_file_stream.eof() || m_dpx_header.FileHeader.Magic != 0x53445058)
+	{
+		LOG_ERROR(eFileOpenError, eFatal, "Header is not valid\n");
+		return;
+	}
+
 	if ((m_machine_is_msbf && swapped) || (!m_machine_is_msbf && !swapped))
 		m_byteorder = eLSBF;
 	else
@@ -175,6 +183,16 @@ void HdrDpxFile::ReadUserData()
 
 	for (uint32_t i = 0; i < 32; ++i)
 		m_file_stream.get(m_dpx_userdata.UserIdentification[i]);
+
+	std::streampos cur_ptr = m_file_stream.tellg();
+	m_file_stream.seekg(0, std::ios::end);
+	if (static_cast<std::streamoff>(cur_ptr) + static_cast<std::streamoff>(m_dpx_header.FileHeader.UserSize) > 
+			m_file_stream.tellg())
+	{
+		LOG_ERROR(eFileReadError, eWarning, "User data size is larger than file size\n");
+		return;
+	}
+	m_file_stream.seekg(cur_ptr);
 
 	m_dpx_userdata.UserData.clear();
 	for (uint32_t i = 0; i < m_dpx_header.FileHeader.UserSize - 32 && !m_file_stream.bad(); ++i)
@@ -392,8 +410,8 @@ void HdrDpxFile::ComputeOffsets()
 			data_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
 			if (data_offset == UNDEFINED_U32 && m_IE[ie_idx].GetHeader(eEncoding) == eEncodingRLE)
 			{
-				uint32_t est_size = static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].GetImageDataSizeInBytes());
-				est_size = ((est_size + 3) >> 2) << 2;  // round to dword boundary
+				uint32_t est_size = CEIL_DWORD(static_cast<uint32_t>((1.0 + RLE_MARGIN) * m_IE[ie_idx].GetImageDataSizeInBytes()));
+
 				if (first_ie)
 				{
 					data_offset = m_filemap.FindEmptySpace(est_size, ie_idx);
@@ -437,7 +455,7 @@ void HdrDpxFile::FillCoreFields()
 		m_dpx_header.FileHeader.DatumMappingDirection = 1;
 		LOG_ERROR(eMissingCoreField, eWarning, "Datum mapping direction not specified, defaulting to 1 (left-to-right)");
 	}
-	m_dpx_header.FileHeader.GenericSize = 1684;
+	m_dpx_header.FileHeader.GenericSize = 1664;
 	m_dpx_header.FileHeader.IndustrySize = 384;
 
 	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
@@ -510,7 +528,7 @@ void HdrDpxFile::FillCoreFields()
 		}
 		else {
 			// Set ununsed image elements to all 1's
-			memset((void *)&(m_dpx_header.ImageHeader.ImageElement[ie_idx]), 0xff, sizeof(HDRDPX_IMAGEELEMENT));
+			ClearHeader(ie_idx);
 		}
 		if (m_IE[ie_idx].GetHeader(eTransferCharacteristic) == eTransferUndefined)
 		{
@@ -653,6 +671,7 @@ static std::string u32_to_hex(uint32_t value)
 #define PRINT_RO_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += "// " + n + "\t" + std::to_string(v) + "\n"; }
 #define PRINT_RO_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) {  header += "// " + n + "\t" + u32_to_hex(v) + "\n";  }
 #define PRINT_FIELD_U8(n,v) if((v)!=UNDEFINED_U8) {  header += n + "\t" + std::to_string(v) + "\n";  }
+#define PRINT_FIELD_CS(n,v) if((v)!=0 && (v)!=0xf) {  header += n + "\t" + std::to_string(v) + "\n";  }
 #define PRINT_RO_FIELD_U8(n,v) if((v)!=UNDEFINED_U8) { header += "// " + n + "\t" + std::to_string(v) + "\n"; }
 #define PRINT_FIELD_U16(n,v) if((v)!=UNDEFINED_U16) {  header += n + "\t" + std::to_string(v) + "\n";  }
 #define PRINT_FIELD_R32(n,v) if(memcmp(&v, &undefined_4bytes, 4)!=0) { header += n + "\t" + std::to_string(v) + "\n"; }
@@ -723,7 +742,7 @@ std::string HdrDpxFile::DumpHeader() const
 		fld_name = "End_Of_Line_Padding_" + std::to_string(ie_idx + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfLinePadding);
 		fld_name = "End_Of_Image_Padding_" + std::to_string(ie_idx + 1); PRINT_FIELD_U32(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfImagePadding);
 		fld_name = "Description_" + std::to_string(ie_idx + 1);		PRINT_FIELD_ASCII(fld_name, m_dpx_header.ImageHeader.ImageElement[ie_idx].Description, 32);
-		fld_name = "Chroma_Subsampling_" + std::to_string(ie_idx + 1); PRINT_FIELD_U8(fld_name, 0xf & (m_dpx_header.ImageHeader.ChromaSubsampling >> (ie_idx * 4)));
+		fld_name = "Chroma_Subsampling_" + std::to_string(ie_idx + 1); PRINT_FIELD_CS(fld_name, 0xf & (m_dpx_header.ImageHeader.ChromaSubsampling >> (ie_idx * 4)));
 	}
 
 	header += "\n// Image source information header\n";
@@ -811,7 +830,7 @@ static bool ValidateTimeDate(std::string s, std::string &errmsg)
 	int month = 1, day, hour, minute, second;
 
 	errmsg = "";
-	if (s.length() == 0)	// Undefined Time & Date string is valid
+	if (s.length() == 0 || IsStringAllFs(s, TIMEDATE_SIZE))	// Undefined Time & Date string is valid
 		return false;
 	// yyyy:MM:dd:hh:mm:ssLTZ
 	if (s[4] != ':' || s[7] != ':' || s[10] != ':' || s[13] != ':' || s[16] != ':')
@@ -875,17 +894,17 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Industry Size field has invalid value");
 	if(GetHeader(eUserDefinedHeaderLength) == UNDEFINED_U32)
 		LOG_ERROR(eValidationError, eWarning, "User Data Size field shall not be undefined");	
-	if (IsStringAllFs(GetHeader(eImageFileName), 100))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eImageFileName), 100))
 		LOG_ERROR(eValidationError, eWarning, "File name field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eCreationDateTime), 24))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eCreationDateTime), 24))
 		LOG_ERROR(eValidationError, eWarning, "Time & date field is all 0xff bytes; undefined strings should use single null character");
 	else if (ValidateTimeDate(GetHeader(eCreationDateTime), errmsg))
 		LOG_ERROR(eValidationError, eWarning, "Creator time and date field not properly constructed: " + errmsg);
-	if (IsStringAllFs(GetHeader(eCreator), 100))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eCreator), 100))
 		LOG_ERROR(eValidationError, eWarning, "Creator field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eProjectName), 200))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eProjectName), 200))
 		LOG_ERROR(eValidationError, eWarning, "Project field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eRightToUseOrCopyright), 200))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eRightToUseOrCopyright), 200))
 		LOG_ERROR(eValidationError, eWarning, "Copyright field is all 0xff bytes; undefined strings should use single null character");
 	if(GetHeader(eDatumMappingDirection) > eDatumMappingDirectionL2R)
 		LOG_ERROR(eValidationError, eWarning, "Datum mapping direction field has invalid value");
@@ -906,7 +925,7 @@ bool HdrDpxFile::Validate()
 	for (auto ie_idx : GetIEIndexList() )
 	{
 		float range_lo, range_hi;
-		if (m_IE[ie_idx].GetHeader(eOffsetToData) == UNDEFINED_U32)   // indicates the IE is not present
+		if (m_IE[ie_idx].GetHeader(eDescriptor) == eDescUndefined)   // indicates the IE is not present
 			continue;
 		num_ies++;
 		if(m_IE[ie_idx].GetHeader(eDataSign) > eDataSignSigned)
@@ -941,6 +960,8 @@ bool HdrDpxFile::Validate()
 			range_hi = INFINITY;
 			break;
 		default:
+			range_lo = -INFINITY;
+			range_hi = INFINITY;
 			LOG_ERROR(eValidationError, eWarning, "Invalid bit depth field");
 		}
 		if (m_IE[ie_idx].GetHeader(eReferenceHighDataCode) < range_lo || m_IE[ie_idx].GetHeader(eReferenceHighDataCode) > range_hi)
@@ -948,7 +969,7 @@ bool HdrDpxFile::Validate()
 		if (m_IE[ie_idx].GetHeader(eReferenceLowDataCode) < range_lo || m_IE[ie_idx].GetHeader(eReferenceLowDataCode) > range_hi)
 			LOG_ERROR(eValidationError, eWarning, "Range low code value is not reprentable within specified bit depth");
 
-		if (!(m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCb) &&
+		if (!(m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCr) &&
 			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescRGB_268_1 && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescABGR) &&
 			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescCbYCrY && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescCYAYA) &&
 			!(m_IE[ie_idx].GetHeader(eDescriptor) >= eDescGeneric2 && m_IE[ie_idx].GetHeader(eDescriptor) <= eDescGeneric8))
@@ -969,13 +990,13 @@ bool HdrDpxFile::Validate()
 		}
 		if (m_IE[ie_idx].GetHeader(eEncoding) > eEncodingRLE)
 			LOG_ERROR(eValidationError, eWarning, "Encoding core field is invalid\n");
-		if (m_IE[ie_idx].GetHeader(eOffsetToData) & 3)
+		if (m_IE[ie_idx].GetHeader(eOffsetToData) != UNDEFINED_U32 && (m_IE[ie_idx].GetHeader(eOffsetToData) & 3))
 			LOG_ERROR(eValidationError, eWarning, "Offset to data is required to be multiple of 4\n");
 		if (m_IE[ie_idx].GetHeader(eEndOfLinePadding) & 3)
 			LOG_ERROR(eValidationError, eWarning, "End of line padding is required to be multiple of 4\n");
 		if ((m_IE[ie_idx].GetHeader(eEndOfImagePadding) & 3) && m_IE[ie_idx].GetHeader(eEndOfImagePadding) != UNDEFINED_U32)
 			LOG_ERROR(eValidationError, eWarning, "End of image padding is required to be multiple of 4\n");
-		if (IsStringAllFs(m_IE[ie_idx].GetHeader(eDescriptionOfImageElement), 32))
+		if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(m_IE[ie_idx].GetHeader(eDescriptionOfImageElement), 32))
 			LOG_ERROR(eValidationError, eWarning, "Description of IE field is all 0xff bytes; undefined strings should use single null character");
 		if (m_IE[ie_idx].GetHeader(eColorDifferenceSiting) > eSitingInterstitialHInterstitialV && m_IE[ie_idx].GetHeader(eColorDifferenceSiting) != eSitingUndefined)
 			LOG_ERROR(eValidationError, eWarning, "Color difference siting field has invalid value\n");
@@ -984,15 +1005,15 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Number of image elements present does not match number of image elements header field");
 
 	// No validation for X/Y offset, center, original size
-	if (IsStringAllFs(GetHeader(eSourceImageFileName), 100))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eSourceImageFileName), 100))
 		LOG_ERROR(eValidationError, eWarning, "Source filename field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eSourceImageDateTime), 24))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eSourceImageDateTime), 24))
 		LOG_ERROR(eValidationError, eWarning, "Source time & date field is all 0xff bytes; undefined strings should use single null character");
 	else if (ValidateTimeDate(GetHeader(eSourceImageDateTime), errmsg))
 		LOG_ERROR(eValidationError, eWarning, "Source time and date field not properly constructed: " + errmsg);
-	if (IsStringAllFs(GetHeader(eInputDeviceName), 32))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eInputDeviceName), 32))
 		LOG_ERROR(eValidationError, eWarning, "Input device name field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eInputDeviceSN), 32))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eInputDeviceSN), 32))
 		LOG_ERROR(eValidationError, eWarning, "Input device SN field is all 0xff bytes; undefined strings should use single null character");
 	if (GetHeader(eBorderValidityXL) > GetHeader(ePixelsPerLine) && GetHeader(eBorderValidityXL) != UNDEFINED_U16)
 		LOG_ERROR(eValidationError, eWarning, "Border validity XL field is larger than image width");
@@ -1004,25 +1025,25 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Border validity YB field is larger than image height");
 	// No validation for pixel aspect ratio or X/Y scanned size
 
-	if (IsStringAllFs(GetHeader(eFilmMfgIdCode), 2))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eFilmMfgIdCode), 2))
 		LOG_ERROR(eValidationError, eWarning, "Film Mfg ID code field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eFilmType), 2))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eFilmType), 2))
 		LOG_ERROR(eValidationError, eWarning, "Film type field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eOffsetInPerfs), 2))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eOffsetInPerfs), 2))
 		LOG_ERROR(eValidationError, eWarning, "Offset in perfs field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(ePrefix), 6))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(ePrefix), 6))
 		LOG_ERROR(eValidationError, eWarning, "Prefix field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eCount), 4))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eCount), 4))
 		LOG_ERROR(eValidationError, eWarning, "Count field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eFormat), 32))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eFormat), 32))
 		LOG_ERROR(eValidationError, eWarning, "Format field is all 0xff bytes; undefined strings should use single null character");
 	if (GetHeader(eFramePositionInSequence) != UNDEFINED_U32 && GetHeader(eSequenceLength) != UNDEFINED_U32 &&
 		GetHeader(eFramePositionInSequence) > GetHeader(eSequenceLength))
 		LOG_ERROR(eValidationError, eWarning, "Frame position field is larger than sequence length field");
 	// No validation for Held count, frame rate of original, shutter angle
-	if (IsStringAllFs(GetHeader(eFrameIdentification), 32))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eFrameIdentification), 32))
 		LOG_ERROR(eValidationError, eWarning, "Frame identification field is all 0xff bytes; undefined strings should use single null character");
-	if (IsStringAllFs(GetHeader(eSlateInformation), 100))
+	if (WARN_FOR_ALL_FF_STRINGS && IsStringAllFs(GetHeader(eSlateInformation), 100))
 		LOG_ERROR(eValidationError, eWarning, "Slate information field is all 0xff bytes; undefined strings should use single null character");
 
 	// No validation for SMPTE time code or user bits
@@ -1051,9 +1072,9 @@ bool HdrDpxFile::Validate()
 		LOG_ERROR(eValidationError, eWarning, "Video identification code (VIC) field has unrecognized value");
 
 	
-	//if (m_filemap.CheckCollisions())
-	//	LOG_ERROR(eValidationError, eWarning, "Image map has potentially overlapping regions");
-	ComputeOffsets();   // Checks file map
+	if (m_filemap.CheckCollisions())
+		LOG_ERROR(eValidationError, eWarning, "Image map has potentially overlapping regions");
+	//ComputeOffsets();   // Checks file map
 
 	// Do we need any other validation warnings/info?
 
@@ -1841,4 +1862,39 @@ void HdrDpxFile::CopyHeaderFrom(const HdrDpxFile &src)
 	m_dpx_header = src.m_dpx_header;
 	m_dpx_sbmdata = src.m_dpx_sbmdata;
 	m_dpx_userdata = src.m_dpx_userdata;
+}
+
+void HdrDpxFile::ClearHeader(uint8_t ie_index)
+{
+	if (ie_index == 0xff)
+	{
+		memset(&m_dpx_header, 0xff, sizeof(HDRDPXFILEFORMAT));
+		SetHeader(eImageFileName, "");
+		SetHeader(eCreationDateTime, "");
+		SetHeader(eCreator, "");
+		SetHeader(eProjectName, "");
+		SetHeader(eRightToUseOrCopyright, "");
+		SetHeader(eSourceImageFileName, "");
+		SetHeader(eSourceImageDateTime, "");
+		SetHeader(eInputDeviceName, "");
+		SetHeader(eInputDeviceSN, "");
+		SetHeader(eFilmMfgIdCode, "");
+		SetHeader(eFilmType, "");
+		SetHeader(eOffsetInPerfs, "");
+		SetHeader(ePrefix, "");
+		SetHeader(eCount, "");
+		SetHeader(eFormat, "");
+		SetHeader(eFrameIdentification, "");
+		SetHeader(eSlateInformation, "");
+		SetHeader(eUserIdentification, "");
+		SetHeader(eSBMFormatDescriptor, "");
+	}
+	for (uint8_t ie = 0; ie < 8; ++ie)
+	{
+		if (ie == ie_index || ie_index == 0xff)
+		{
+			memset(&m_dpx_header.ImageHeader.ImageElement[ie], 0xff, sizeof(HDRDPX_IMAGEELEMENT));
+			memset(&m_dpx_header.ImageHeader.ImageElement[ie].Description, 0, sizeof(DESCRIPTION_SIZE));
+		}
+	}
 }

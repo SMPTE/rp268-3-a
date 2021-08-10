@@ -624,7 +624,7 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 	uint32_t xpos;
 	uint32_t image_data_word;
 	Fifo fifo(16);
-	int32_t int_datum;
+	int32_t int_datum = 0;
 	uint32_t row_wr_idx = 0;
 	uint32_t expected_zero;
 	union {
@@ -859,7 +859,8 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 		}
 		else			// No RLE
 		{
-			m_int_row[row_wr_idx++] = int_datum;
+			if(bpc < 32)
+				m_int_row[row_wr_idx++] = int_datum;
 			component++;
 			if (component == num_components)
 			{
@@ -867,9 +868,14 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 				xpos++;
 			}
 		}
+		if (xpos > m_width)
+		{
+			LOG_ERROR(eBadParameter, eFatal, "RLE decode went past the end of line\n");
+			return;
+		}
 	}
 
-	m_previous_file_offset = static_cast<uint32_t>(m_filestream_ptr->tellg());
+	m_previous_file_offset = static_cast<uint32_t>(m_filestream_ptr->tellg()) - 4 * (fifo.m_fullness >> 5);
 }
 
 
@@ -1472,7 +1478,7 @@ uint32_t HdrDpxImageElement::GetHeight(void) const
 uint32_t HdrDpxImageElement::BytesUsed(void)
 {
 	if (m_dpx_ie_ptr->Encoding == 1)
-		return (((static_cast<uint32_t>(m_filestream_ptr->tellp()) - m_dpx_ie_ptr->DataOffset + 3) >> 2) << 2) + m_dpx_ie_ptr->EndOfImagePadding;
+		return static_cast<uint32_t>(m_filestream_ptr->tellp()) - m_dpx_ie_ptr->DataOffset + m_dpx_ie_ptr->EndOfImagePadding;
 	else
 		return(GetRowSizeInBytes(true) * m_height + m_dpx_ie_ptr->EndOfImagePadding);
 }
