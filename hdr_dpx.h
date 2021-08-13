@@ -875,6 +875,13 @@ namespace Dpx {
 		eSMPTETCTypeUndefined = 255   ///< Undefined time code type
 	};
 
+	/// options for dumping data as bytes or strings
+	enum HdrDpxDumpFormat
+	{
+		eDumpFormatDefault,   ///< Use default for data type
+		eDumpFormatAsBytes,   ///< Dump data as bytes
+		eDumpFormatAsStrings, ///< Dump data as strings
+	};
 
 	/// Data structure for SMPTE time code
 	struct SMPTETimeCode
@@ -1213,7 +1220,10 @@ namespace Dpx {
 		std::vector<uint8_t> GetIEIndexList() const;
 		/** Copy header info from another DPX file object */
 		void CopyHeaderFrom(const HdrDpxFile &src);
-
+		/*** Indicate whether user data is dumped with header dump (default no) and if dumped as bytes or string (default bytes) */
+		void DumpUserDataOptions(bool dump_ud, HdrDpxDumpFormat format = eDumpFormatDefault);
+		/*** Indicate whether standards-based metadata is dumped with header dump (default no) and if dumped as bytes or strings */
+		void DumpStandardsBasedMetedataOptions(bool dump_sbmd, HdrDpxDumpFormat format = eDumpFormatDefault);
 
 		/** Gets the value of a string header field
 			@param field			which header field to get
@@ -1396,6 +1406,10 @@ namespace Dpx {
 		bool m_open_for_read = false;   ///< Flag indicating file is open for reading
 		bool m_is_header_locked = false;   ///< Flag indicating header is locked
 		std::fstream m_file_stream;    ///< File stream handle
+		bool m_ud_dump = false;    ///< indicates whether to dump user data with header
+		HdrDpxDumpFormat m_ud_dump_format = eDumpFormatDefault; ///< user data dump format
+		bool m_sbm_dump = false;    ///< indicates whether to dump standards-based metadata with header
+		HdrDpxDumpFormat m_sbm_dump_format = eDumpFormatDefault; ///< user data dump format
 
 		HdrDpxByteOrder m_byteorder = eNativeByteOrder;  ///< Byte order of file
 		HDRDPXFILEFORMAT m_dpx_header;   ///< DPX header

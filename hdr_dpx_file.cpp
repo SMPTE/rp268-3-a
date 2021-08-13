@@ -154,7 +154,7 @@ void HdrDpxFile::OpenForReading(std::string filename)
 	}
 
 	// Read any present image elements
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset != UNDEFINED_U32)
 		{
@@ -196,7 +196,7 @@ void HdrDpxFile::ReadUserData()
 
 	m_dpx_userdata.UserData.clear();
 	for (uint32_t i = 0; i < m_dpx_header.FileHeader.UserSize - 32 && !m_file_stream.bad(); ++i)
-		m_dpx_userdata.UserData.push_back(m_file_stream.get());
+		m_dpx_userdata.UserData.push_back(static_cast<unsigned char>(m_file_stream.get()));
 
 	if (m_file_stream.bad() || m_file_stream.eof())
 	{
@@ -232,7 +232,7 @@ void HdrDpxFile::ReadSbmData()
 	}
 
 	for (uint32_t i = 0; i < m_dpx_sbmdata.SbmLength; ++i)
-		m_dpx_sbmdata.SbmData.push_back(m_file_stream.get());
+		m_dpx_sbmdata.SbmData.push_back(static_cast<unsigned char>(m_file_stream.get()));
 
 	if (m_file_stream.bad() || m_file_stream.eof())
 	{
@@ -369,7 +369,7 @@ void HdrDpxFile::ComputeOffsets()
 		m_filemap.AddRegion(m_dpx_header.FileHeader.StandardsBasedMetadataOffset, m_dpx_header.FileHeader.StandardsBasedMetadataOffset + m_dpx_sbmdata.SbmLength + 132, 102);
 
 	// Add IEs with data offsets
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
@@ -391,7 +391,7 @@ void HdrDpxFile::ComputeOffsets()
 
 
 	// Next add fixed-size IE's that don't yet have data offsets
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
@@ -402,8 +402,8 @@ void HdrDpxFile::ComputeOffsets()
 	}
 
 	// Lastly add first variable-size IE
-	int first_ie = 1;
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	uint8_t first_ie = 1;
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
@@ -424,7 +424,7 @@ void HdrDpxFile::ComputeOffsets()
 	}
 
 	// Figure out where image data starts
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized && min_offset > m_IE[ie_idx].GetHeader(eOffsetToData))
 			min_offset = m_IE[ie_idx].GetHeader(eOffsetToData);
@@ -441,7 +441,7 @@ void HdrDpxFile::ComputeOffsets()
 
 void HdrDpxFile::FillCoreFields()
 {
-	int number_of_ie = 0, first_ie_idx = -1;
+	uint8_t number_of_ie = 0, first_ie_idx = UINT8_MAX;
 
 	if (m_dpx_header.FileHeader.Magic != 0x53445058 && m_dpx_header.FileHeader.Magic != UNDEFINED_U32)
 	{
@@ -458,16 +458,16 @@ void HdrDpxFile::FillCoreFields()
 	m_dpx_header.FileHeader.GenericSize = 1664;
 	m_dpx_header.FileHeader.IndustrySize = 384;
 
-	for (int ie_idx = 0; ie_idx < 8; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < 8; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
 			number_of_ie++;
-			if(first_ie_idx < 0)
+			if(first_ie_idx == UINT8_MAX)
 				first_ie_idx = ie_idx;
 		}
 	}
-	if(first_ie_idx < 0)
+	if(first_ie_idx == UINT8_MAX)
 		LOG_ERROR(eBadParameter, eFatal, "No initialized image elements found");
 
 	if (m_dpx_header.ImageHeader.Orientation == UNDEFINED_U16)
@@ -488,7 +488,7 @@ void HdrDpxFile::FillCoreFields()
 		LOG_ERROR(eFileWriteError, eFatal, "Lines per element must be specified");
 		return;
 	}
-	for (int ie_idx = 0; ie_idx < number_of_ie; ++ie_idx)
+	for (uint8_t ie_idx = 0; ie_idx < number_of_ie; ++ie_idx)
 	{
 		if (m_IE[ie_idx].m_isinitialized)
 		{
@@ -666,6 +666,13 @@ static std::string u32_to_hex(uint32_t value)
 	return sstream.str();
 }
 
+static std::string u8_to_hex(uint8_t value)
+{
+	std::stringstream sstream;
+	sstream << "0x" << std::setfill('0') << std::setw(2) << std::hex << static_cast<unsigned int>(value);
+	return sstream.str();
+}
+
 #define PRINT_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + std::to_string(v) + "\n"; }
 #define PRINT_FIELD_U32_HEX(n,v) if((v)!=UNDEFINED_U32) { header += n + "\t" + u32_to_hex(v) + "\n"; }
 #define PRINT_RO_FIELD_U32(n,v) if((v)!=UNDEFINED_U32) { header += "// " + n + "\t" + std::to_string(v) + "\n"; }
@@ -802,6 +809,25 @@ std::string HdrDpxFile::DumpHeader() const
 	{
 		header += "\n// User data header\n";
 		PRINT_FIELD_ASCII(std::string("User_Identification"), m_dpx_userdata.UserIdentification, 32);
+		// Read user data and print
+		std::string userid;
+		std::vector<uint8_t> userdata;
+		if (m_ud_dump_format == eDumpFormatDefault || m_ud_dump_format == eDumpFormatAsBytes)
+		{
+			GetUserData(userid, userdata);
+			header += "User data (hex bytes):\n";
+			for (unsigned int i = 0; i < userdata.size(); ++i)
+			{
+				header += u8_to_hex(userdata[i]) + " ";
+				if ((i & 0xf) == 0xf)
+					header += "\n";
+			}
+			header += "\n";
+		}
+		else  // As string:
+		{
+			header += GetHeader(eUserDefinedData) + "\n";
+		}
 	}
 
 	if (m_dpx_header.FileHeader.StandardsBasedMetadataOffset != UNDEFINED_U32)
@@ -809,6 +835,34 @@ std::string HdrDpxFile::DumpHeader() const
 		header += "\n// Standards-based metadata header\n";
 		PRINT_FIELD_ASCII(std::string("Sbm_Descriptor"), m_dpx_sbmdata.SbmFormatDescriptor, 128);
 		PRINT_FIELD_U32(std::string("Sbm_Length"), m_dpx_sbmdata.SbmLength);
+		// Read standards-based metadata & print
+		std::string sbmdesc;
+		std::vector<uint8_t> sbmdata;
+		if (GetStandardsBasedMetadata(sbmdesc, sbmdata))
+		{
+			// Note that ST 336 (KLV) is always dumped as hex data
+			if (sbmdesc.compare("ST336") == 0 || m_sbm_dump_format == eDumpFormatAsBytes)  // print as hex bytes
+			{
+				header += "Hex bytes:\n";
+				for (unsigned int i = 0; i < sbmdata.size(); ++i)
+				{
+					header += u8_to_hex(sbmdata[i]) + " ";
+					if ((i & 0xf) == 0xf)
+						header += "\n";
+				}
+				header += "\n";
+			}
+			else   // Print as string
+			{
+				header += "Standards-based-metadata:\n";
+				header += GetHeader(Dpx::eSBMetadata);
+				// Alternatively:
+				//char *c = (char *)sbmdata.data();
+				//std::cout << std::string(c);
+			}
+
+			std::cout << "\n";
+		}
 	}
 	return header;
 }
@@ -1897,4 +1951,16 @@ void HdrDpxFile::ClearHeader(uint8_t ie_index)
 			memset(&m_dpx_header.ImageHeader.ImageElement[ie].Description, 0, sizeof(DESCRIPTION_SIZE));
 		}
 	}
+}
+
+void HdrDpxFile::DumpUserDataOptions(bool dump_ud, HdrDpxDumpFormat format)
+{
+	m_ud_dump = dump_ud;
+	m_ud_dump_format = format;
+}
+
+void HdrDpxFile::DumpStandardsBasedMetedataOptions(bool dump_sbmd, HdrDpxDumpFormat format)
+{
+	m_sbm_dump = dump_sbmd;
+	m_sbm_dump_format = format;
 }

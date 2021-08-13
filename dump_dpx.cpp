@@ -463,51 +463,11 @@ int main(int argc, char *argv[])
 		dump_error_log("Validation errors:\n", f);
 	}
 
+	f.DumpUserDataOptions(true);   // Dump user data with header
+	f.DumpStandardsBasedMetedataOptions(true);   // Dump standards-based metadata with header
+
 	std::cout << f;  // Dump header
 
-	// Read user data and print
-	std::string userid;
-	std::vector<uint8_t> userdata;
-	if (f.GetUserData(userid, userdata))
-	{
-
-		std::cout << "User data (hex bytes):\n";
-		for (unsigned int i = 0; i < userdata.size(); ++i)
-		{
-			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(userdata[i]) << " ";
-			if ((i & 0xf) == 0xf)
-				std::cout << "\n";
-		}
-		std::cout << "\n";
-		// Could also print user-defined data as a string using f.GetHeader(Dpx::eUserDefinedData)
-	}
-
-	// Read standards-based metadata & print
-	std::string sbmdesc;
-	std::vector<uint8_t> sbmdata;
-	if (f.GetStandardsBasedMetadata(sbmdesc, sbmdata))
-	{
-		if (sbmdesc.compare("ST336") == 0)  // print as hex bytes
-		{
-			std::cout << "ST336 (KLV) hex bytes:\n";
-			for (unsigned int i = 0; i < sbmdata.size(); ++i)
-			{
-				std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(sbmdata[i]) << " ";
-				if ((i & 0xf) == 0xf)
-					std::cout << "\n";
-			}
-		}
-		else   // Print as string
-		{
-			std::cout << "Standards-based-metadata:\n";
-			std::cout << f.GetHeader(Dpx::eSBMetadata);
-			// Alternatively:
-			//char *c = (char *)sbmdata.data();
-			//std::cout << std::string(c);
-		}
-
-		std::cout << "\n";
-	}
 
 	// Output pixel data
 	if (output_raw)   // Raw planes to files
