@@ -85,3 +85,38 @@ for ($byte_order = 0; $byte_order < 2; ++$byte_order)
      }
    }
 }
+
+# 8-bit tests
+$bit_depth = 8;
+$packing = 0;
+for ($byte_order = 0; $byte_order < 2; ++$byte_order)
+{
+  for ($direction = 0; $direction < 2; ++$direction)
+  {
+       for ($encoding = 0; $encoding < 2; ++ $encoding)
+       {
+           $rng = 0;
+           $tf = "BT709";
+           $range_txt = $rng ? "fr" : "lr";
+           $bo_txt = $byte_order ? "msbf" : "lsbf";
+           $dir_txt = $direction ? "l2r" : "r2l";
+           $pk_txt = ($packing == 0) ? "packed" : (($packing == 1) ? "ma" : "mb");
+           $rle_txt = $encoding ? "rle" : "norle"; 
+           $fn = "ctest_" . $bit_depth . "bpc" . $range_txt . "_" . $desc[$desc_idx] . $chroma[$desc_idx];
+           if ($planar[$desc_idx]) { $fn = $fn . "p"; }
+           $fn = "${fn}_${bo_txt}_${dir_txt}_${pk_txt}_${rle_txt}.dpx"; 
+           print "generate_color_test_pattern -o ${fn} -tf ${tf} -corder ";
+           print $desc[$desc_idx];
+           print " -usefr ${rng} -bpc ${bit_depth} -planar ";
+           print $planar[$desc_idx];
+           print " -chroma ";
+           print $chroma[$desc_idx];
+           print " -w " . $w[$size_idx] . " -h " . $h[$size_idx];
+           print " -dmd ${dir_txt} -order ${bo_txt} -packing ${pk_txt}";
+           print " -encoding ${encoding}\n";
+
+           $desc_idx = ($desc_idx + 1) % 22;
+           $size_idx = ($size_idx + 1) % 4;
+       }
+   }
+}
