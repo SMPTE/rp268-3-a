@@ -196,6 +196,28 @@ public:
 				AddColor(BLACK_P4P, 396, 2048, 2048);
 				m_isvalid = true;
 			}
+			else if (bpc == 8 && tftype == TF_SDR)
+			{
+				AddColor(WHITE_75, 180, 128, 128);
+				AddColor(YELLOW_75, 168, 44, 136);
+				AddColor(CYAN_75, 145, 147, 44);
+				AddColor(GREEN_75, 133, 63, 52);
+				AddColor(MAGENTA_75, 63, 193, 204);
+				AddColor(RED_75, 51, 109, 212);
+				AddColor(BLUE_75, 28, 212, 120);
+				AddColor(GRAY_40, 104, 512, 512);
+				AddColor(CYAN_100, 188, 154, 16);
+				AddColor(BLUE_100, 32, 240, 118);
+				AddColor(WHITE_100, 235, 128, 128);
+				AddColor(YELLOW_100, 219, 16, 38);
+				AddColor(BLACK_0, 16, 128, 128);
+				AddColor(RED_100, 63, 102, 240);
+				AddColor(GRAY_15, 49, 128, 128);
+				AddColor(BLACK_M2P, 12, 128, 128);
+				AddColor(BLACK_P2P, 21, 128, 128);
+				AddColor(BLACK_P4P, 25, 128, 128);
+				m_isvalid = true;
+			}
 			else if (bpc == 10 && tftype == TF_SDR)
 			{
 				AddColor(WHITE_75, 721, 512, 512);
@@ -296,7 +318,29 @@ public:
 			}
 			else  // narrow range
 			{
-				if (bpc == 10 && tftype == TF_PQ)
+				if (bpc == 8 && tftype == TF_SDR)
+				{
+					AddColor(WHITE_75, 180, 180, 180);
+					AddColor(YELLOW_75, 180, 180, 16);
+					AddColor(CYAN_75, 16, 180, 180);
+					AddColor(GREEN_75, 16, 180, 16);
+					AddColor(MAGENTA_75, 180, 16, 180);
+					AddColor(RED_75, 180, 16, 16);
+					AddColor(BLUE_75, 16, 16, 180);
+					AddColor(GRAY_40, 104, 104, 104);
+					AddColor(CYAN_100, 16, 235, 235);
+					AddColor(BLUE_100, 16, 16, 235);
+					AddColor(WHITE_100, 235, 235, 235);
+					AddColor(YELLOW_100, 235, 235, 16);
+					AddColor(BLACK_0, 16, 16, 16);
+					AddColor(RED_100, 235, 16, 16);
+					AddColor(GRAY_15, 49, 49, 49);
+					AddColor(BLACK_M2P, 12, 12, 12);
+					AddColor(BLACK_P2P, 20, 20, 20);
+					AddColor(BLACK_P4P, 25, 25, 25);
+					m_isvalid = true;
+				}
+				else if (bpc == 10 && tftype == TF_PQ)
 				{
 					AddColor(WHITE_75, 572, 572, 572);
 					AddColor(YELLOW_75, 572, 572, 64);
