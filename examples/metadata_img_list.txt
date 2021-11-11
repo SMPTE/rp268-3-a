@@ -1,5 +1,5 @@
-hintergrund-musik.dpx
-hintergrund-musik-klv.dpx
-hintergrund-musik-regxml.dpx
-hintergrund-musik-user-klv.dpx
-hintergrund-musik-xmp.dpx
+metadata-test.dpx
+metadata-test-klv.dpx
+metadata-test-regxml.dpx
+metadata-test-user-klv.dpx
+metadata-test-xmp.dpx
