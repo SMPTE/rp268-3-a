@@ -1,4 +1,5 @@
 1bit_test.dpx
+1x1.dpx
 1x4096.dpx
 24kx1.dpx
 24kx4k.dpx

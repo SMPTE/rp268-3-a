@@ -46,3 +46,11 @@ generate_color_test_pattern -o ctest_12bpclr_CbYCr444_msbf_l2r_ma_norle.dpx -tf 
 generate_color_test_pattern -o ctest_12bpclr_CbYCrA444_msbf_l2r_ma_rle.dpx -tf BT709 -corder CbYCrA -usefr 0 -bpc 12 -planar 0 -chroma 444 -w 3840 -h 2160 -dmd l2r -order msbf -packing ma -encoding 1
 generate_color_test_pattern -o ctest_12bpclr_CbYCrY422_msbf_l2r_mb_norle.dpx -tf PQ -corder CbYCrY -usefr 0 -bpc 12 -planar 0 -chroma 422 -w 4096 -h 2160 -dmd l2r -order msbf -packing mb -encoding 0
 generate_color_test_pattern -o ctest_12bpclr_CbYACrYA422_msbf_l2r_mb_rle.dpx -tf BT709 -corder CbYACrYA -usefr 0 -bpc 12 -planar 0 -chroma 422 -w 8192 -h 4320 -dmd l2r -order msbf -packing mb -encoding 1
+generate_color_test_pattern -o ctest_8bpclr_YCbCr422p_lsbf_r2l_packed_norle.dpx -tf BT709 -corder YCbCr -usefr 0 -bpc 8 -planar 1 -chroma 422 -w 1920 -h 1080 -dmd r2l -order lsbf -packing packed -encoding 0
+generate_color_test_pattern -o ctest_8bpclr_YCbCrA422p_lsbf_r2l_packed_rle.dpx -tf BT709 -corder YCbCrA -usefr 0 -bpc 8 -planar 1 -chroma 422 -w 3840 -h 2160 -dmd r2l -order lsbf -packing packed -encoding 1
+generate_color_test_pattern -o ctest_8bpclr_CYY420_lsbf_l2r_packed_norle.dpx -tf BT709 -corder CYY -usefr 0 -bpc 8 -planar 0 -chroma 420 -w 4096 -h 2160 -dmd l2r -order lsbf -packing packed -encoding 0
+generate_color_test_pattern -o ctest_8bpclr_CYAYA420_lsbf_l2r_packed_rle.dpx -tf BT709 -corder CYAYA -usefr 0 -bpc 8 -planar 0 -chroma 420 -w 8192 -h 4320 -dmd l2r -order lsbf -packing packed -encoding 1
+generate_color_test_pattern -o ctest_8bpclr_YCbCr420p_msbf_r2l_packed_norle.dpx -tf BT709 -corder YCbCr -usefr 0 -bpc 8 -planar 1 -chroma 420 -w 1920 -h 1080 -dmd r2l -order msbf -packing packed -encoding 0
+generate_color_test_pattern -o ctest_8bpclr_YCbCrA420p_msbf_r2l_packed_rle.dpx -tf BT709 -corder YCbCrA -usefr 0 -bpc 8 -planar 1 -chroma 420 -w 3840 -h 2160 -dmd r2l -order msbf -packing packed -encoding 1
+generate_color_test_pattern -o ctest_8bpclr_BGR444_msbf_l2r_packed_norle.dpx -tf BT709 -corder BGR -usefr 0 -bpc 8 -planar 0 -chroma 444 -w 4096 -h 2160 -dmd l2r -order msbf -packing packed -encoding 0
+generate_color_test_pattern -o ctest_8bpclr_BGR444p_msbf_l2r_packed_rle.dpx -tf BT709 -corder BGR -usefr 0 -bpc 8 -planar 1 -chroma 444 -w 8192 -h 4320 -dmd l2r -order msbf -packing packed -encoding 1
