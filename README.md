@@ -1,5 +1,14 @@
-# smpte-31fs-hdrdpx
-Informative reference implementation for ST 268-2 (HDR extensions to DPX)
+# SMPTE RP 268-3-a
+
+Element A of RP 268-3 Reference Materials for DPX V2.0HDR Implementations
+
+_This repository is public._
+
+Please consult [CONTRIBUTING.md](./CONTRIBUTING.md), [CONFIDENTIALITY.md](./CONFIDENTIALITY.md), [LICENSE.md](./LICENSE.md) and [PATENTS.md](./PATENTS.md) for important notices.
+
+# Reporting issues
+
+Please report issues at https://github.com/SMPTE/rp268-3-a/issues or at mailto:31fs-chair@smpte.org.
 
 # How to build
 
