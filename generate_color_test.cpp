@@ -869,7 +869,7 @@ int main(int argc, char *argv[])
 		std::cout << " -o <outfilename>";
 		std::cout << " -tf <BT709|HLG|PQ>";
 		std::cout << " -corder <corder>";
-		std::cout << " -userfr <1|0>";
+		std::cout << " -usefr <1|0>";
 		std::cout << " -bpc <8|10|12>";
 		std::cout << " -planar <1|0>";
 		std::cout << " -chroma <444|422|420>";
