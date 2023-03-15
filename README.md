@@ -4,7 +4,11 @@ Element A of RP 268-3 Reference Materials for DPX V2.0HDR Implementations
 
 _This repository is public._
 
-Please consult [CONTRIBUTING.md](./CONTRIBUTING.md), [CONFIDENTIALITY.md](./CONFIDENTIALITY.md), [LICENSE.md](./LICENSE.md) and [PATENTS.md](./PATENTS.md) for important notices.
+Please consult [CONTRIBUTING.md](./CONTRIBUTING.md), [CONFIDENTIALITY.md](./CONFIDENTIALITY.md) and [PATENTS.md](./PATENTS.md) for important notices.
+
+# License
+
+Unless specified otherwise, the contents of this element are licensed as indicated at [LICENSE.md](./LICENSE.md).
 
 # Reporting issues
 
