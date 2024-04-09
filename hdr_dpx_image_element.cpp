@@ -1,5 +1,6 @@
 /***************************************************************************
 *    Copyright (c) 2020, Broadcom Inc.
+*    Copyright (c) 2024, Society of Motion Picture and Television Engineers
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -517,7 +518,7 @@ uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 		idw_per_line = static_cast<uint32_t>(2 * num_c * m_width);
 	else if (m_dpx_ie_ptr->BitSize == 32)
 		idw_per_line = static_cast<uint32_t>(num_c * m_width);
-	else if (m_dpx_ie_ptr->BitSize == 16)
+	else if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) == 16)
 		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width / 2.0));
 	else if (m_dpx_ie_ptr->Packing == 0 || m_dpx_ie_ptr->BitSize == 8)
 		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width * m_dpx_ie_ptr->BitSize / 8.0 / 4.0));
@@ -544,7 +545,8 @@ uint32_t HdrDpxImageElement::GetOffsetForRow(uint32_t row) const
 	return m_dpx_ie_ptr->DataOffset + GetRowSizeInBytes(true) * row;
 }
 
-void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
+
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, uint8_t* datum_ptr)
 {
 
 	if (!m_isinitialized)
@@ -557,14 +559,86 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int32_t *datum_ptr)
 		LOG_ERROR(eFileReadError, eFatal, "File read error");
 		return;
 	}
-	if (m_dpx_ie_ptr->BitSize >= 32)
+	if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 8)
 	{
-		LOG_ERROR(eBadParameter, eFatal, "Failed attempt reading integer pixels from floating point file");
+		LOG_ERROR(eBadParameter, eFatal, "Can only read uint8 row from 1 or 8 bit image element");
+		return;
+	}
+
+	m_uint8_row = datum_ptr;
+	ReadRow(row);
+}
+
+
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int8_t* datum_ptr)
+{
+
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to read pixels from uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_read || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileReadError, eFatal, "File read error");
+		return;
+	}
+	if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 8)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only read int8 row from 1 or 8 bit image element");
+		return;
+	}
+
+	m_uint8_row = reinterpret_cast<uint8_t*>(datum_ptr);
+	ReadRow(row);
+}
+
+
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, uint16_t *datum_ptr)
+{
+
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to read pixels from uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_read || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileReadError, eFatal, "File read error");
+		return;
+	}
+	if ((BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 16) || (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) <= 8))
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only read uint16 row from 10, 12, or 16 bit image element");
 		return;
 	}
 	
 
-	m_int_row = datum_ptr;
+	m_uint16_row = datum_ptr;
+	ReadRow(row);
+}
+
+void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, int16_t* datum_ptr)
+{
+
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to read pixels from uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_read || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileReadError, eFatal, "File read error");
+		return;
+	}
+	if ((BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 16) || (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) <= 8))
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only read int16 row from 10, 12, or 16 bit image element");
+		return;
+	}
+
+
+	m_uint16_row = reinterpret_cast<uint16_t *>(datum_ptr);
 	ReadRow(row);
 }
 
@@ -605,7 +679,7 @@ void HdrDpxImageElement::Dpx2AppPixels(uint32_t row, double *datum_ptr)
 		LOG_ERROR(eFileReadError, eFatal, "File read error");
 		return;
 	}
-	if (m_dpx_ie_ptr->BitSize != 32)
+	if (m_dpx_ie_ptr->BitSize != 64)
 	{
 		LOG_ERROR(eBadParameter, eFatal, "Failed attempt reading double-precision pixels from file");
 		return;
@@ -638,10 +712,10 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 	int rle_state = 0;   // 0 = flag, 1-n = component value
 	int32_t run_length = 0;
 	int rle_count = 0;
-	int32_t rle_pixel[8];
+	uint16_t rle_pixel[8];
 	bool rle_is_same;
 	const bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
-	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
+	const uint8_t bpc = BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize);
 
 	if (m_dpx_ie_ptr->Encoding == 1)  // RLE
 	{
@@ -813,8 +887,16 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 			}
 			else if (component == num_components - 1)
 			{
-				m_int_row[row_wr_idx++] = int_datum;
-				rle_pixel[component] = int_datum;
+				if (bpc <= 8)
+				{
+					m_uint8_row[row_wr_idx++] = int_datum & 0xff;
+					rle_pixel[component] = int_datum & 0xff;
+				}
+				else  // bpc is 10, 12, or 16
+				{
+					m_uint16_row[row_wr_idx++] = int_datum & 0xffff;
+					rle_pixel[component] = int_datum & 0xffff;
+				}
 				if (rle_is_same)
 				{
 					if (xpos + run_length > m_width && !m_warn_rle_same_past_eol)
@@ -826,7 +908,7 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 					{
 						for (int c = 0; c < num_components; ++c)
 						{
-							m_int_row[row_wr_idx++] = rle_pixel[c];
+							m_uint16_row[row_wr_idx++] = rle_pixel[c];
 						}
 					}
 					component = 0;
@@ -852,15 +934,25 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 			}
 			else
 			{
-				m_int_row[row_wr_idx++] = int_datum;
-				rle_pixel[component] = int_datum;
+				if (bpc <= 8)
+				{
+					m_uint8_row[row_wr_idx++] = int_datum & 0xff;
+					rle_pixel[component] = int_datum & 0xff;
+				}
+				else  // bpc is 10, 12, or 16
+				{
+					m_uint16_row[row_wr_idx++] = int_datum & 0xffff;
+					rle_pixel[component] = int_datum & 0xffff;
+				}
 				component++;
 			}
 		}
 		else			// No RLE
 		{
-			if(bpc < 32)
-				m_int_row[row_wr_idx++] = int_datum;
+			if (bpc <= 8)
+				m_uint8_row[row_wr_idx++] = int_datum & 0xff;
+			else if (bpc <= 16)  // bpc is 10, 12, or 16/fp16
+				m_uint16_row[row_wr_idx++] = int_datum & 0xffff;
 			component++;
 			if (component == num_components)
 			{
@@ -896,7 +988,7 @@ void HdrDpxImageElement::WriteFlush()
 
 void HdrDpxImageElement::WriteDatum(int32_t datum)
 {
-	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
+	const uint8_t bpc = BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize);
 	switch (m_dpx_ie_ptr->Packing)
 	{
 	case 0:
@@ -942,10 +1034,14 @@ void HdrDpxImageElement::WritePixel(uint32_t xpos)
 		{
 		case 1:
 		case 8:
+			int_datum = m_uint8_row[xpos * num_components + component];
+			WriteDatum(int_datum);
+			break;
 		case 10:
 		case 12:
 		case 16:
-			int_datum = m_int_row[xpos * num_components + component];
+		case 253:
+			int_datum = m_uint16_row[xpos * num_components + component];
 			WriteDatum(int_datum);
 			break;
 		case 32:
@@ -964,7 +1060,7 @@ void HdrDpxImageElement::WritePixel(uint32_t xpos)
 	}
 }
 
-bool HdrDpxImageElement::IsNextSame(uint32_t xpos, int32_t pixel[])
+bool HdrDpxImageElement::IsNextSame(uint32_t xpos, uint16_t pixel[], uint8_t bpc)
 {
 	int num_components;
 
@@ -972,10 +1068,21 @@ bool HdrDpxImageElement::IsNextSame(uint32_t xpos, int32_t pixel[])
 		return false;
 	num_components = GetNumberOfComponents();
 
-	for (int c = 0; c < num_components; ++c)
+	if (bpc <= 8)
 	{
-		if (pixel[c] != m_int_row[(xpos + 1) * num_components + c])
-			return false;
+		for (int c = 0; c < num_components; ++c)
+		{
+			if (pixel[c] != m_uint8_row[(xpos + 1) * num_components + c])
+				return false;
+		}
+	}
+	else  // bpc is 10, 12, or 16
+	{
+		for (int c = 0; c < num_components; ++c)
+		{
+			if (pixel[c] != m_uint16_row[(xpos + 1) * num_components + c])
+				return false;
+		}
 	}
 	return true;
 }
@@ -988,7 +1095,7 @@ void HdrDpxImageElement::WriteLineEnd()
 }
 
 
-void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *datum_ptr)
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, uint8_t* datum_ptr)
 {
 	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
 	if (!m_isinitialized)
@@ -1001,14 +1108,88 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, int32_t *datum_ptr)
 		LOG_ERROR(eFileWriteError, eFatal, "File write error");
 		return;
 	}
-	if (m_dpx_ie_ptr->BitSize >= 32)
+	if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 8)
 	{
-		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing integer pixels to floating point file");
+		LOG_ERROR(eBadParameter, eFatal, "Can only write uint8 samples to 1 or 8 bit image element");
 		return;
 	}
 
 
-	m_int_row = datum_ptr;
+	m_uint8_row = datum_ptr;
+	WriteRow(row);
+}
+
+
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, int8_t* datum_ptr)
+{
+	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to write pixels to uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_write || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileWriteError, eFatal, "File write error");
+		return;
+	}
+	if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 8)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only write int8 samples to 1 or 8 bit image element");
+		return;
+	}
+
+
+	m_uint8_row = reinterpret_cast<uint8_t*>(datum_ptr);
+	WriteRow(row);
+}
+
+
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, uint16_t *datum_ptr)
+{
+	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to write pixels to uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_write || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileWriteError, eFatal, "File write error");
+		return;
+	}
+	if ((BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 16) || (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) <= 8))
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only write uint16 samples to 10, 12, or 16 bit image element");
+		return;
+	}
+
+
+	m_uint16_row = datum_ptr;
+	WriteRow(row);
+}
+
+void HdrDpxImageElement::App2DpxPixels(uint32_t row, int16_t* datum_ptr)
+{
+	// There is no check on whether the d pointer is valid or the size of d, that is the responsiblility of the caller
+	if (!m_isinitialized)
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Tried to write pixels to uninitialized image element");
+		return;
+	}
+	if (!m_is_open_for_write || !m_filestream_ptr->good())
+	{
+		LOG_ERROR(eFileWriteError, eFatal, "File write error");
+		return;
+	}
+	if ((BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) > 16) || (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) <= 8))
+	{
+		LOG_ERROR(eBadParameter, eFatal, "Can only write int16 samples to 10, 12, or 16 bit image element");
+		return;
+	}
+
+
+	m_uint16_row = reinterpret_cast<uint16_t *>(datum_ptr);
 	WriteRow(row);
 }
 
@@ -1068,8 +1249,8 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 	uint32_t run_length = 0;
 	unsigned int max_run;
 	bool run_type;
-	int32_t rle_pixel[8];
-	const uint8_t bpc = m_dpx_ie_ptr->BitSize;
+	uint16_t rle_pixel[8];
+	const uint8_t bpc = BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize);
 
 	m_fifo.Clear();
 
@@ -1133,17 +1314,17 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 			else {
 				for (component = 0; component < num_components; ++component)
 				{
-					rle_pixel[component] = m_int_row[xpos * num_components + component];
+					rle_pixel[component] = m_uint16_row[xpos * num_components + component];
 				}
 				if (num_components > 1)
-					run_type = IsNextSame(xpos, rle_pixel);
+					run_type = IsNextSame(xpos, rle_pixel, bpc);
 				else  // For 1-component IEs, it doesn't make sense to declare a run unleses it lasts more than 2 pixels
-					run_type = IsNextSame(xpos, rle_pixel) && IsNextSame(xpos + 1, rle_pixel); 
+					run_type = IsNextSame(xpos, rle_pixel, bpc) && IsNextSame(xpos + 1, rle_pixel, bpc); 
 				if (run_type)  //  Same run
 				{
 					for (run_length = 1; run_length < m_width - xpos && run_length < max_run - 1; ++run_length)
 					{
-						if (IsNextSame(xpos + run_length, rle_pixel) != run_type)
+						if (IsNextSame(xpos + run_length, rle_pixel, bpc) != run_type)
 							break;
 					}
 				}
@@ -1153,9 +1334,9 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 					{
 						for (component = 0; component < num_components; ++component)
 						{
-							rle_pixel[component] = m_int_row[(xpos + run_length) * num_components + component];
+							rle_pixel[component] = m_uint16_row[(xpos + run_length) * num_components + component];
 						}
-						if (IsNextSame(xpos + run_length, rle_pixel) != run_type)
+						if (IsNextSame(xpos + run_length, rle_pixel, bpc) != run_type)
 						{
 							run_length--;
 							break;
@@ -1343,7 +1524,7 @@ void HdrDpxImageElement::SetHeader(HdrDpxFieldsBitDepth field, HdrDpxBitDepth va
 		return;
 	}
 	if ((m_dpx_ie_ptr->BitSize <= 16 && (value == 32 || value == 64)) ||
-		((m_dpx_ie_ptr->BitSize == 32 || m_dpx_ie_ptr->BitSize==64) && value<=16))
+		((m_dpx_ie_ptr->BitSize == 32 || m_dpx_ie_ptr->BitSize==64 || m_dpx_ie_ptr->BitSize == 253) && value<=16))
 	{
 		LOG_ERROR(eNoError, eInformational, "Changing bit depth invalidates previous low/high code values");
 		m_dpx_ie_ptr->HighData.d = UNDEFINED_U32;

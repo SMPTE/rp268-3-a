@@ -1,5 +1,6 @@
 /***************************************************************************
 *    Copyright (c) 2020, Broadcom Inc.
+*    Copyright (c) 2024, Society of Motion Picture and Television Engineers
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -1008,6 +1009,7 @@ bool HdrDpxFile::Validate()
 			range_lo = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 0.0f : -32768.0f;
 			range_hi = (m_IE[ie_idx].GetHeader(eDataSign) == eDataSignUnsigned) ? 65535.0f : 32767.0f;
 			break;
+		case eBitDepthR16:
 		case eBitDepthR32:
 		case eBitDepthR64:
 			range_lo = -INFINITY;

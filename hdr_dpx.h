@@ -1,5 +1,6 @@
 /***************************************************************************
 *    Copyright (c) 2018-2020, Broadcom Inc.
+*    Copyright (c) 2024, Society of Motion Picture and Television Engineers
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -60,6 +61,9 @@
 
 /** Round an offset up to a 4-byte (DWORD) boundar */
 #define CEIL_DWORD(o)    (((o + 3)>>2)<<2)
+
+/** Convert the bit depth enum value to number of bits needed to store */
+#define BITSIZE_ENUM_TO_BITS(bpc)   ((bpc==253) ? 16 : (bpc))
 
 #ifndef DPX_H
 
@@ -648,6 +652,7 @@ namespace Dpx {
 		eBitDepth16 = 16,   ///< 16 bits/sample
 		eBitDepthR32 = 32,  ///< 32 bit floating point
 		eBitDepthR64 = 64,  ///< 64 bit floating point
+		eBitDepthR16 = 253, ///< 16 bit floating point
 		eBitDepthUndefined = UINT8_MAX  ///< undefined bit depth
 	};
 
@@ -947,15 +952,27 @@ namespace Dpx {
 		~HdrDpxImageElement();
 
 		// Writing functions:
-		/** Write a row of integer pixels from a specified pointer to a file. IE must be configured with bit depth of 16 or less (integer samples).
+		/** Write a row of unsigned int8 pixels from a specified pointer to a file. IE must be configured with bit depth of 8 or 1.
 			@param row				row number to write
 			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
-		void App2DpxPixels(uint32_t row, int32_t *datum_ptr);
+		void App2DpxPixels(uint32_t row, uint8_t* datum_ptr);
+		/** Write a row of signed int8 pixels from a specified pointer to a file. IE must be configured with bit depth of 8 or 1.
+			@param row				row number to write
+			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
+		void App2DpxPixels(uint32_t row, int8_t* datum_ptr);
+		/** Write a row of unsigned int16 or fp16 pixels from a specified pointer to a file. IE must be configured with bit depth of 10, 12 or 16 for integer samples.
+			@param row				row number to write
+			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
+		void App2DpxPixels(uint32_t row, uint16_t *datum_ptr);
+		/** Write a row of signed int16 pixels from a specified pointer to a file. IE must be configured with bit depth of 10, 12, or 16 for integer samples.
+			@param row				row number to write
+			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
+		void App2DpxPixels(uint32_t row, int16_t* datum_ptr);
 		/** Write a row of 32-bit float pixels from a specified pointer to a file. IE must be configured with bit depth = 32 (float samples).
 			@param row				row number to write
 			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
 		void App2DpxPixels(uint32_t row, float *datum_ptr);
-		/** Write a row of integer pixels from a specified pointer to a file. IE must be configured with bit depth = 64 (double samples).
+		/** Write a row of 64-bit double precision pixels from a specified pointer to a file. IE must be configured with bit depth = 64 (double samples).
 			@param row				row number to write
 			@param[in]	datum_ptr	pointer to buffer that contains a line's worth of samples to write */
 		void App2DpxPixels(uint32_t row, double *datum_ptr);
@@ -1010,10 +1027,22 @@ namespace Dpx {
 		void CopyHeaderFrom(HdrDpxImageElement *ie);
 
 		// Reading functions:
-		/** Read a row of integer pixels from a DPX file to a specified pointer. Fails if file contains floating point samples.
+		/** Read a row of unsigned int8 pixels from a DPX file to a specified pointer. Fails if bit depth is not 8 or 1.
 			@param row				row number to read
 			@param[out] datum_ptr	pointer to buffer to write samples to */
-		void Dpx2AppPixels(uint32_t row, int32_t *datum_ptr);
+		void Dpx2AppPixels(uint32_t row, uint8_t* datum_ptr);
+		/** Read a row of signed int8 pixels from a DPX file to a specified pointer. Fails if bit depth is not 8 or 1.
+			@param row				row number to read
+			@param[out] datum_ptr	pointer to buffer to write samples to */
+		void Dpx2AppPixels(uint32_t row, int8_t* datum_ptr);
+		/** Read a row of fp16 or unsigned int16 pixels from a DPX file to a specified pointer. Fails if bit depth is not 10, 12 or 16 for integer samples.
+			@param row				row number to read
+			@param[out] datum_ptr	pointer to buffer to write samples to */
+		void Dpx2AppPixels(uint32_t row, uint16_t *datum_ptr);
+		/** Read a row of signed int16 pixels from a DPX file to a specified pointer. Fails if bit depth is not 10, 12, or 16.
+			@param row				row number to read
+			@param[out] datum_ptr	pointer to buffer to write samples to */
+		void Dpx2AppPixels(uint32_t row, int16_t* datum_ptr);
 		/** Read a row of 32-bit float pixels from a DPX file to a specified pointer. Fails if file does not contain 32-bit float samples.
 			@param row				row number to read
 			@param[out] datum_ptr	pointer to buffer to write samples to */
@@ -1122,8 +1151,9 @@ namespace Dpx {
 		void WriteLineEnd();
 		/** Function to determine if next pixel is the same (for RLE) 
 			@param xpos				X position within line
-			@param pixel			Pixel value to match */
-		bool IsNextSame(uint32_t xpos, int32_t pixel[]);
+			@param pixel			Pixel value to match
+			@param bpc				Bit depth */
+		bool IsNextSame(uint32_t xpos, uint16_t pixel[], uint8_t bpc);
 		/** Compute the width and height values from the header info */
 		void ComputeWidthAndHeight(void);
 
@@ -1153,7 +1183,8 @@ namespace Dpx {
 		uint8_t m_ie_index = 0xff;  //!< indicates which IE index corresponds to this IE
 		float *m_float_row;  //!< pointer to floating point pixel data
 		double *m_double_row;  //!< pointer to double precision pixel data
-		int32_t *m_int_row;  //!< pointer to integer pixel datat
+		uint8_t* m_uint8_row;  //!< pointer to int8 pixel data
+		uint16_t *m_uint16_row;  //!< pointer to int16 pixel data
 		uint32_t m_row_rd_idx;  //!< which row is being read
 		bool m_is_open_for_write;  //!< flag indicating if file is open for writing
 		bool m_is_open_for_read;  //!< flag indicating if file is open for reading

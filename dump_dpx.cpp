@@ -1,5 +1,6 @@
 /***************************************************************************
 *    Copyright (c) 2019-2021, Broadcom Inc.
+*    Copyright (c) 2024 Society of Motion Pictures and Television Engineers
 *
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -43,8 +44,15 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#ifdef __STDCPP_FLOAT_16_T__
+#include <stdfloat>
+const bool fp16_conv_support = true;
+#else
+const bool fp16_conv_support = false;
+#endif
 
 using namespace std;
+
 
 
 
@@ -76,7 +84,7 @@ static void dump_error_log(const std::string logmessage, const Dpx::HdrDpxFile &
 	@param v	Byte to convert
 	@return		String representing the value of the byte
 */
-inline string tohex(uint8_t v)
+static inline string tohex(uint8_t v)
 {
 	stringstream ss;
 	
@@ -150,22 +158,69 @@ std::string datum_label_to_ext(Dpx::DatumLabel dl, uint8_t chroma_idx)
 
 
 /**
-	Converts an integer sample to a normalized [0, 1.0] double-precision value
+	Converts a signed integer sample to a normalized [0, 1.0] double-precision value
 
 	@param i			Integer sample to convert
 	@param is_chroma	Flag indicating whether the sample is chroma
 	@param lowcode		Low code value
-	@param is_signed	Flag indicating whether the sample is signed
 	@param bit_depth_in	The bit depth of the input sample
 	@return				Normalized floating point sample
 */
-inline double int_to_norm_double(int32_t i, bool is_chroma, float lowcode, bool is_signed, uint8_t bit_depth_in)
+static inline double int_to_norm_double(int8_t i, bool is_chroma, float lowcode, uint8_t bit_depth_in)
 {
 	// Output is normalized [0..1.0]
-	if (is_signed)  // Signed assumes full range
-	{
+	// Signed assumes full range
+	return static_cast<double>(i) / ((1 << bit_depth_in) - 1);
+}
+
+
+/**
+	Converts an unsigned integer sample to a normalized [0, 1.0] double-precision value
+
+	@param i			Integer sample to convert
+	@param is_chroma	Flag indicating whether the sample is chroma
+	@param lowcode		Low code value
+	@param bit_depth_in	The bit depth of the input sample
+	@return				Normalized floating point sample
+*/
+static inline double int_to_norm_double(uint8_t i, bool is_chroma, float lowcode, uint8_t bit_depth_in)
+{
+	if (is_chroma && lowcode > 1)  // Any low code value > 1 assumes limited range. Output floats are normalized [0..1.0]
+		return (static_cast<double>(i) - (1 << (bit_depth_in - 1))) / (240 << (bit_depth_in - 8)) + 0.5;
+	else if (!is_chroma && lowcode > 1)
+		return (static_cast<double>(i) - (16 << (bit_depth_in - 8))) / (219 << (bit_depth_in - 8));
+	else   // Full range
 		return static_cast<double>(i) / ((1 << bit_depth_in) - 1);
-	}
+}
+
+/**
+	Converts a signed integer sample to a normalized [0, 1.0] double-precision value
+
+	@param i			Integer sample to convert
+	@param is_chroma	Flag indicating whether the sample is chroma
+	@param lowcode		Low code value
+	@param bit_depth_in	The bit depth of the input sample
+	@return				Normalized floating point sample
+*/
+static inline double int_to_norm_double(int16_t i, bool is_chroma, float lowcode, uint8_t bit_depth_in)
+{
+	// Output is normalized [0..1.0]
+	// Signed assumes full range
+	return static_cast<double>(i) / ((1 << bit_depth_in) - 1);
+}
+
+
+/**
+	Converts an unsigned integer sample to a normalized [0, 1.0] double-precision value
+
+	@param i			Integer sample to convert
+	@param is_chroma	Flag indicating whether the sample is chroma
+	@param lowcode		Low code value
+	@param bit_depth_in	The bit depth of the input sample
+	@return				Normalized floating point sample
+*/
+static inline double int_to_norm_double(uint16_t i, bool is_chroma, float lowcode, uint8_t bit_depth_in)
+{
 	if (is_chroma && lowcode > 1)  // Any low code value > 1 assumes limited range. Output floats are normalized [0..1.0]
 		return (static_cast<double>(i) - (1 << (bit_depth_in - 1))) / (240 << (bit_depth_in - 8)) + 0.5;
 	else if (!is_chroma && lowcode > 1)
@@ -226,6 +281,14 @@ void write_raw_datum(float rowdata, uint8_t bit_depth_conv, float hicode, float 
 		out = rowdata;
 		raw_fp->write((char *)&out, sizeof(double));
 	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		out = rowdata;
+		raw_fp->write((char*)&out, 2);
+#endif
+	}
 	// Converts to integer (unsigned) format
 	else if (bit_depth_conv > 8)
 	{
@@ -268,6 +331,14 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 		out = rowdata;
 		raw_fp->write((char *)&out, sizeof(double));
 	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		out = rowdata;
+		raw_fp->write((char*)&out, 2);
+#endif
+	}
 	// Converts to integer (unsigned) format
 	else if (bit_depth_conv > 8)
 	{
@@ -287,17 +358,16 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 /**
 	Write a single integer sample to a file
 
-	@param rowdata			vector containing FP32 sample array. There are num_components samples for each pixel.
+	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
 	@param bit_depth_in		Bit depth of integer sample
 	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
 	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
 	@param lowcode			Low code value.
-	@param is_signed		Flag indicating sample is signed
 	@param write_full_range	Flag indicating the samples should be written as full range
 	@param is_chroma		Flag indicating that the samples being written are chroma samples
 	@param raw_fp			ofstream object to write to (assumed to be open & valid)
 */
-void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool is_signed, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
+void write_raw_datum(int16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
 {
 	if (bit_depth_conv == 0)
 		bit_depth_conv = bit_depth_in;
@@ -305,27 +375,194 @@ void write_raw_datum(int32_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 	if (bit_depth_conv == 32)
 	{
 		float outrow;
-		outrow = static_cast<float>(int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in));
+		outrow = static_cast<float>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char *)&outrow, sizeof(float));
 	}
 	else if (bit_depth_conv == 64)
 	{
 		double outrow;
-		outrow = (int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in));
+		outrow = (int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char *)&outrow, sizeof(double));
+	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&out, 2);
+#endif
 	}
 	// Converts to integer (unsigned) format
 	else if (bit_depth_conv > 8)
 	{
 		uint16_t outrow;
-		outrow = norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
+		outrow = norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
 		raw_fp->write((char *)&outrow, sizeof(uint16_t));
 	}
 	else
 	{
 		uint8_t outrow;
-		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, is_signed, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
+		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
 		raw_fp->write((char *)&outrow, sizeof(uint8_t));
+	}
+}
+
+
+/**
+	Write a single unsigned integer sample to a file
+
+	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
+	@param bit_depth_in		Bit depth of integer sample
+	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
+void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
+{
+	if (bit_depth_conv == 0)
+		bit_depth_conv = bit_depth_in;
+
+	if (bit_depth_conv == 32)
+	{
+		float outrow;
+		outrow = static_cast<float>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(float));
+	}
+	else if (bit_depth_conv == 64)
+	{
+		double outrow;
+		outrow = (int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(double));
+	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&out, 2);
+#endif
+	}
+	// Converts to integer (unsigned) format
+	else if (bit_depth_conv > 8)
+	{
+		uint16_t outrow;
+		outrow = norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
+		raw_fp->write((char*)&outrow, sizeof(uint16_t));
+	}
+	else
+	{
+		uint8_t outrow;
+		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
+		raw_fp->write((char*)&outrow, sizeof(uint8_t));
+	}
+}
+
+
+/**
+	Write a single integer sample to a file
+
+	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
+	@param bit_depth_in		Bit depth of integer sample
+	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
+void write_raw_datum(int8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
+{
+	if (bit_depth_conv == 0)
+		bit_depth_conv = bit_depth_in;
+
+	if (bit_depth_conv == 32)
+	{
+		float outrow;
+		outrow = static_cast<float>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(float));
+	}
+	else if (bit_depth_conv == 64)
+	{
+		double outrow;
+		outrow = (int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(double));
+	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&out, 2);
+#endif
+	}
+	// Converts to integer (unsigned) format
+	else if (bit_depth_conv > 8)
+	{
+		uint16_t outrow;
+		outrow = norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
+		raw_fp->write((char*)&outrow, sizeof(uint16_t));
+	}
+	else
+	{
+		uint8_t outrow;
+		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
+		raw_fp->write((char*)&outrow, sizeof(uint8_t));
+	}
+}
+
+
+/**
+	Write a single unsigned integer sample to a file
+
+	@param rowdata			vector containing integer sample array. There are num_components samples for each pixel.
+	@param bit_depth_in		Bit depth of integer sample
+	@param bit_depth_conv	If different from bit_depth_in, samples are converted to a bit depth of bit_depth_conv before writing
+	@param hicode			High code value. Note that samples beyond high & low code value could be clipped/clamped. This is not a requirement of the DPX spec but rather just an implementation choice for this example.
+	@param lowcode			Low code value.
+	@param write_full_range	Flag indicating the samples should be written as full range
+	@param is_chroma		Flag indicating that the samples being written are chroma samples
+	@param raw_fp			ofstream object to write to (assumed to be open & valid)
+*/
+void write_raw_datum(uint8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_conv, float hicode, float lowcode, bool write_full_range, bool is_chroma, std::shared_ptr<ofstream> raw_fp)
+{
+	if (bit_depth_conv == 0)
+		bit_depth_conv = bit_depth_in;
+
+	if (bit_depth_conv == 32)
+	{
+		float outrow;
+		outrow = static_cast<float>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(float));
+	}
+	else if (bit_depth_conv == 64)
+	{
+		double outrow;
+		outrow = (int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&outrow, sizeof(double));
+	}
+	else if (bit_depth_conv == 253)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t out;
+		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		raw_fp->write((char*)&out, 2);
+#endif
+	}
+	// Converts to integer (unsigned) format
+	else if (bit_depth_conv > 8)
+	{
+		uint16_t outrow;
+		outrow = norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma);
+		raw_fp->write((char*)&outrow, sizeof(uint16_t));
+	}
+	else
+	{
+		uint8_t outrow;
+		outrow = static_cast<uint8_t>(norm_double_to_uint(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in), bit_depth_conv, write_full_range, is_chroma));
+		raw_fp->write((char*)&outrow, sizeof(uint8_t));
 	}
 }
 
@@ -401,7 +638,7 @@ int main(int argc, char *argv[])
 		std::cerr << "  <dpxfile> - DPX file to dump\n";
 		std::cerr << "  <out_rawfile_base> - Output filename base name. The output extension will be .#.<plane_type>, where # is the first image element number and <plane_type> is y,u,v,r,g,b,a, or g0-7\n\n";
 		std::cerr << "  <bit_depth_conv> - Convert DPX file to specified bit depth. If unspecified, uses bit depth from DPX.\n";
-		std::cerr << "  -dump_full_range - If present, the output raw files will be full range; if absent, the output raw files will be limited range (float/double output always scaled to 0-1.0)\n";
+		std::cerr << "  -dump_full_range - If present, the output raw files will be full range; if absent, the output raw files will be limited range (float/double output always scaled to 0-1.0 if src is int)\n";
 		std::cerr << "  A sample in a file is stored within the smallest of (1, 2, 4, or 8) bytes that fits a <bit_depth_conv>-bit sample.\n";
 		std::cerr << "  For example, if we have an 8-bit DPX image element and bit_depth_conv = 12, then the IE is converted from 8 to 12 bits (<<4) and\n";
 		std::cerr << "  each 12-bit sample is placed in a 2-byte (16-bit) field in the raw file output (right-justified).\n\n";
@@ -520,21 +757,76 @@ int main(int argc, char *argv[])
 						}
 					}
 				}
-				else
+				else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth16 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth12 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth10)  // 2-byte int
 				{
-					std::vector<int32_t> rowdata;
-					rowdata.resize(ie->GetRowSizeInDatums());
-					ie->Dpx2AppPixels(row, static_cast<int32_t *>(rowdata.data()));
-					for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+					if (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned)
 					{
-						for (uint8_t c = 0; c < num_components; ++c)
+						std::vector<int16_t> rowdata;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<int16_t*>(rowdata.data()));
+						for (uint32_t column = 0; column < ie->GetWidth(); ++column)
 						{
-							if ((row & 1) && c == alt_chroma)
-								write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, is_signed, write_full_range, true, raw_fp_list[num_components]);
-							else
-								write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, is_signed, write_full_range, is_chroma[c], raw_fp_list[c]);
+							for (uint8_t c = 0; c < num_components; ++c)
+							{
+								if ((row & 1) && c == alt_chroma)
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, true, raw_fp_list[num_components]);
+								else
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma[c], raw_fp_list[c]);
+							}
 						}
 					}
+					else // unsigned int
+					{
+						std::vector<uint16_t> rowdata;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<uint16_t*>(rowdata.data()));
+						for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+						{
+							for (uint8_t c = 0; c < num_components; ++c)
+							{
+								if ((row & 1) && c == alt_chroma)
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, true, raw_fp_list[num_components]);
+								else
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma[c], raw_fp_list[c]);
+							}
+						}
+					}
+				}
+				else  // 1-byte int
+				{
+					if (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned)
+					{
+						std::vector<int8_t> rowdata;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<int8_t*>(rowdata.data()));
+						for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+						{
+							for (uint8_t c = 0; c < num_components; ++c)
+							{
+								if ((row & 1) && c == alt_chroma)
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, true, raw_fp_list[num_components]);
+								else
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma[c], raw_fp_list[c]);
+							}
+						}
+					}
+					else // unsigned int
+					{
+						std::vector<uint8_t> rowdata;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<uint8_t*>(rowdata.data()));
+						for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+						{
+							for (uint8_t c = 0; c < num_components; ++c)
+							{
+								if ((row & 1) && c == alt_chroma)
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, true, raw_fp_list[num_components]);
+								else
+									write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma[c], raw_fp_list[c]);
+							}
+						}
+					}
+
 				}
 			}
 			for (auto fp : raw_fp_list)
@@ -589,20 +881,74 @@ int main(int argc, char *argv[])
 						std::cout << rowdata[datum_idx++] << ") ";
 					}
 				}
+				else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth16 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth12 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth10)  // 2-byte int
+				{
+					if (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned)
+					{
+						std::vector<int16_t> rowdata;
+						int32_t datum_idx = 0;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<int16_t*>(rowdata.data()));
+						for (uint32_t x = 0; x < ie->GetWidth(); ++x)
+						{
+							std::cout << "(";
+							for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+							{
+								std::cout << rowdata[datum_idx++] << ",";
+							}
+							std::cout << rowdata[datum_idx++] << ") ";
+						}
+					}
+					else  // unsigned int
+					{
+						std::vector<uint16_t> rowdata;
+						int32_t datum_idx = 0;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<uint16_t*>(rowdata.data()));
+						for (uint32_t x = 0; x < ie->GetWidth(); ++x)
+						{
+							std::cout << "(";
+							for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+							{
+								std::cout << rowdata[datum_idx++] << ",";
+							}
+							std::cout << rowdata[datum_idx++] << ") ";
+						}
+					}
+				}
 				else
 				{
-					std::vector<int32_t> rowdata;
-					int32_t datum_idx = 0;
-					rowdata.resize(ie->GetRowSizeInDatums());
-					ie->Dpx2AppPixels(row, static_cast<int32_t *>(rowdata.data()));
-					for (uint32_t x = 0; x < ie->GetWidth(); ++x)
+					if (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned)
 					{
-						std::cout << "(";
-						for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+						std::vector<int8_t> rowdata;
+						int32_t datum_idx = 0;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<int8_t*>(rowdata.data()));
+						for (uint32_t x = 0; x < ie->GetWidth(); ++x)
 						{
-							std::cout << rowdata[datum_idx++] << ",";
+							std::cout << "(";
+							for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+							{
+								std::cout << rowdata[datum_idx++] << ",";
+							}
+							std::cout << rowdata[datum_idx++] << ") ";
 						}
-						std::cout << rowdata[datum_idx++] << ") ";
+					}
+					else  // unsigned int
+					{
+						std::vector<uint8_t> rowdata;
+						int32_t datum_idx = 0;
+						rowdata.resize(ie->GetRowSizeInDatums());
+						ie->Dpx2AppPixels(row, static_cast<uint8_t*>(rowdata.data()));
+						for (uint32_t x = 0; x < ie->GetWidth(); ++x)
+						{
+							std::cout << "(";
+							for (uint8_t c = 0; c < ie->GetNumberOfComponents() - 1; ++c)
+							{
+								std::cout << rowdata[datum_idx++] << ",";
+							}
+							std::cout << rowdata[datum_idx++] << ") ";
+						}
 					}
 				}
 			}

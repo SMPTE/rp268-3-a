@@ -273,8 +273,8 @@ int main(int argc, char *argv[])
 	for(uint8_t out_ie_idx = 0; out_ie_idx < dest_ie_desc_list.size(); ++out_ie_idx)
 	{ 
 		std::vector<Dpx::DatumLabel> dl_dest = Dpx::DescriptorToDatumList(dest_ie_desc_list[out_ie_idx]);
-		std::vector<int32_t> datum_row_out;
-		std::vector<int32_t> datum_row_in[8];
+		std::vector<uint16_t> datum_row_out;
+		std::vector<uint16_t> datum_row_in[8];
 		std::vector<Dpx::DatumLabel> dl_src[8];
 		uint8_t datum_stride[8];
 		std::vector<int> datum_ie_map;

@@ -1055,48 +1055,97 @@ int main(int argc, char *argv[])
 	for (ie_idx = 0; ie_idx < iemap.GetNumberOfIEs(); ++ie_idx)
 	{
 		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_idx);
-		std::vector<int32_t> datum_row;
-		IEDescriptor desc = iemap.GetDescriptor(ie_idx);
-		datum_row.resize(ie->GetRowSizeInDatums());
-		for (uint32_t row = 0; row < ie->GetHeight(); ++row)
+		if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth1 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth8)
 		{
-			uint32_t datum_idx = 0;
-			for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+			std::vector<uint8_t> datum_row;
+			IEDescriptor desc = iemap.GetDescriptor(ie_idx);
+			datum_row.resize(ie->GetRowSizeInDatums());
+			for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 			{
-				int32_t cbcomps[3];
-				bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
-				colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
-				for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
+				uint32_t datum_idx = 0;
+				for (uint32_t column = 0; column < ie->GetWidth(); ++column)
 				{
-					if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
-						datum_row[datum_idx++] = alphaval;
-					else if (dl == Dpx::DATUM_R || dl == Dpx::DATUM_Y)
-						datum_row[datum_idx++] = cbcomps[0];
-					else if (dl == Dpx::DATUM_G || dl == Dpx::DATUM_CB)
-						datum_row[datum_idx++] = cbcomps[1];
-					else if (dl == Dpx::DATUM_B || dl == Dpx::DATUM_CR)
-						datum_row[datum_idx++] = cbcomps[2];
-					else if (dl == Dpx::DATUM_C)
+					int32_t cbcomps[3];
+					bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
+					colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+					for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
 					{
-						if (row & 1)   // odd row (CR)
-							datum_row[datum_idx++] = cbcomps[2];
-						else           // Even row (CB)
+						if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
+							datum_row[datum_idx++] = alphaval;
+						else if (dl == Dpx::DATUM_R || dl == Dpx::DATUM_Y)
+							datum_row[datum_idx++] = cbcomps[0];
+						else if (dl == Dpx::DATUM_G || dl == Dpx::DATUM_CB)
 							datum_row[datum_idx++] = cbcomps[1];
-					}
-					else if (dl == Dpx::DATUM_Y2)
-					{
-						color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
-						colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
-						datum_row[datum_idx++] = cbcomps[0];
+						else if (dl == Dpx::DATUM_B || dl == Dpx::DATUM_CR)
+							datum_row[datum_idx++] = cbcomps[2];
+						else if (dl == Dpx::DATUM_C)
+						{
+							if (row & 1)   // odd row (CR)
+								datum_row[datum_idx++] = cbcomps[2];
+							else           // Even row (CB)
+								datum_row[datum_idx++] = cbcomps[1];
+						}
+						else if (dl == Dpx::DATUM_Y2)
+						{
+							color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
+							colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+							datum_row[datum_idx++] = cbcomps[0];
+						}
 					}
 				}
+				if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
+				{
+					printf("Unexpected datum index\n");
+					getchar();
+				}
+				ie->App2DpxPixels(row, datum_row.data());
 			}
-			if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
+		}
+		else  // 10, 12, or 16 bit
+		{
+			std::vector<uint16_t> datum_row;
+			IEDescriptor desc = iemap.GetDescriptor(ie_idx);
+			datum_row.resize(ie->GetRowSizeInDatums());
+			for (uint32_t row = 0; row < ie->GetHeight(); ++row)
 			{
-				printf("Unexpected datum index\n");
-				getchar();
+				uint32_t datum_idx = 0;
+				for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+				{
+					int32_t cbcomps[3];
+					bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
+					colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+					for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
+					{
+						if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
+							datum_row[datum_idx++] = alphaval;
+						else if (dl == Dpx::DATUM_R || dl == Dpx::DATUM_Y)
+							datum_row[datum_idx++] = cbcomps[0];
+						else if (dl == Dpx::DATUM_G || dl == Dpx::DATUM_CB)
+							datum_row[datum_idx++] = cbcomps[1];
+						else if (dl == Dpx::DATUM_B || dl == Dpx::DATUM_CR)
+							datum_row[datum_idx++] = cbcomps[2];
+						else if (dl == Dpx::DATUM_C)
+						{
+							if (row & 1)   // odd row (CR)
+								datum_row[datum_idx++] = cbcomps[2];
+							else           // Even row (CB)
+								datum_row[datum_idx++] = cbcomps[1];
+						}
+						else if (dl == Dpx::DATUM_Y2)
+						{
+							color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
+							colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+							datum_row[datum_idx++] = cbcomps[0];
+						}
+					}
+				}
+				if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size() / (desc.h_subs ? 2 : 1)))
+				{
+					printf("Unexpected datum index\n");
+					getchar();
+				}
+				ie->App2DpxPixels(row, datum_row.data());
 			}
-			ie->App2DpxPixels(row, datum_row.data());
 		}
 	}
 
