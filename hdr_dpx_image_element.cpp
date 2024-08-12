@@ -908,7 +908,10 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 					{
 						for (int c = 0; c < num_components; ++c)
 						{
-							m_uint16_row[row_wr_idx++] = rle_pixel[c];
+							if (bpc <= 8)
+								m_uint8_row[row_wr_idx++] = static_cast<uint8_t>(rle_pixel[c] & 0xff);
+							else
+								m_uint16_row[row_wr_idx++] = rle_pixel[c];
 						}
 					}
 					component = 0;
@@ -936,7 +939,7 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 			{
 				if (bpc <= 8)
 				{
-					m_uint8_row[row_wr_idx++] = int_datum & 0xff;
+					m_uint8_row[row_wr_idx++] = static_cast<uint8_t>(int_datum & 0xff);;
 					rle_pixel[component] = int_datum & 0xff;
 				}
 				else  // bpc is 10, 12, or 16

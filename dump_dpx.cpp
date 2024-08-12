@@ -611,23 +611,14 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 	for (auto c : dl_list)
 	{
 		is_chroma.push_back((c == Dpx::DATUM_C) || (c == Dpx::DATUM_CB) || (c == Dpx::DATUM_CR));
-		if (c == Dpx::DATUM_Y2)
-			fp_list.push_back(first_y_fp);
-		else if (c == Dpx::DATUM_A2)
-			fp_list.push_back(first_a_fp);
-		else
-		{
-			if (c == Dpx::DATUM_C)
-				alt_chroma = static_cast<uint8_t>(fp_list.size());
-			new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
-			std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(c, 0));
-			new_fp->open(rawfilename, ios::out | ios::binary);
-			fp_list.push_back(new_fp);
-			if (c == Dpx::DATUM_Y)
-				first_y_fp = new_fp;
-			if (c == Dpx::DATUM_A)
-				first_a_fp = new_fp;
-		}
+		if (c == Dpx::DATUM_C)
+			alt_chroma = static_cast<uint8_t>(fp_list.size());
+		new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
+		std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(c, 0));
+		new_fp->open(rawfilename, ios::out | ios::binary);
+		assert(!new_fp->fail());
+				
+		fp_list.push_back(new_fp);
 	}
 
 	if (alt_chroma != UNDEFINED_U8)
@@ -635,6 +626,7 @@ void open_raw_files(std::vector<std::shared_ptr<std::ofstream>> &fp_list, uint8_
 		new_fp = static_cast<std::shared_ptr<std::ofstream>>(new std::ofstream);
 		std::string rawfilename(raw_base_name + "." + std::to_string(ie_idx) + "." + datum_label_to_ext(Dpx::DATUM_C, 1));
 		new_fp->open(rawfilename, ios::out | ios::binary);
+		assert(!new_fp->fail());
 		fp_list.push_back(new_fp);
 	}
 }
