@@ -1036,7 +1036,6 @@ int main(int argc, char *argv[])
 
 	// Set header values as desired (defaults assumed based on image element structure)
 	dpxf.SetHeader(Dpx::eRightToUseOrCopyright, "(C) 20XX Not a real copyright");  // Key is a string, value matches data type
-	dpxf.SetHeader(Dpx::eDatumMappingDirection, Dpx::eDatumMappingDirectionL2R);
 
 
 	// Start writing file

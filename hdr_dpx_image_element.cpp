@@ -1317,7 +1317,10 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 			else {
 				for (component = 0; component < num_components; ++component)
 				{
-					rle_pixel[component] = m_uint16_row[xpos * num_components + component];
+					if (bpc <= 8)
+						rle_pixel[component] = static_cast<uint16_t>(m_uint8_row[xpos * num_components + component]);
+					else
+						rle_pixel[component] = m_uint16_row[xpos * num_components + component];
 				}
 				if (num_components > 1)
 					run_type = IsNextSame(xpos, rle_pixel, bpc);
@@ -1337,7 +1340,10 @@ void HdrDpxImageElement::WriteRow(uint32_t row)
 					{
 						for (component = 0; component < num_components; ++component)
 						{
-							rle_pixel[component] = m_uint16_row[(xpos + run_length) * num_components + component];
+							if (bpc <= 8)
+								rle_pixel[component] = static_cast<uint16_t>(m_uint8_row[(xpos + run_length) * num_components + component]);
+							else
+								rle_pixel[component] = m_uint16_row[(xpos + run_length) * num_components + component];
 						}
 						if (IsNextSame(xpos + run_length, rle_pixel, bpc) != run_type)
 						{
