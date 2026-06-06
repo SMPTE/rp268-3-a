@@ -47,6 +47,14 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <cmath>
+
+#ifdef __STDCPP_FLOAT_16_T__
+#include <stdfloat>
+const bool fp16_support = true;
+#else
+const bool fp16_support = false;
+#endif
 
 using namespace std;
 
@@ -479,6 +487,101 @@ private:
 	int32_t m_mid;     ///< midpoint of code values
 };
 
+/** Color bar values in linear light, normalized to nits, stored as FP16 bit patterns.
+    Values derived from the BT.2111-1 full-range 10-bit PQ RGB color bars via the
+    PQ inverse EOTF (ST 2084). White 100% = 10000 nits. */
+class CBColorFP16
+{
+public:
+	CBColorFP16() { m_isvalid = false; }
+	CBColorFP16(bool /*usefullrange*/)
+	{
+		// FP16 is always linear light in nits; range flag has no meaning
+		// Values below computed from 10-bit full-range PQ codes via PQ EOTF:
+		//   code -> nits = 10000 * ((max(E^(1/78.84375) - 0.8359375, 0)) / (18.8515625 - 18.6875*E^(1/78.84375)))^(1/0.1593017578125)
+		// where E = code / 1023.
+		// FP16 bit patterns: derived from BT.2111-1 full-range 10-bit PQ RGB via PQ inverse EOTF
+		AddColor(WHITE_75,   0x5A48, 0x5A48, 0x5A48);  // ~201 nits per channel
+		AddColor(YELLOW_75,  0x5A48, 0x5A48, 0x0000);
+		AddColor(CYAN_75,    0x0000, 0x5A48, 0x5A48);
+		AddColor(GREEN_75,   0x0000, 0x5A48, 0x0000);
+		AddColor(MAGENTA_75, 0x5A48, 0x0000, 0x5A48);
+		AddColor(RED_75,     0x5A48, 0x0000, 0x0000);
+		AddColor(BLUE_75,    0x0000, 0x0000, 0x5A48);
+		AddColor(GRAY_40,    0x500C, 0x500C, 0x500C);  // ~32.4 nits
+		AddColor(CYAN_100,   0x0000, 0x70E2, 0x70E2);  // 10000 nits
+		AddColor(BLUE_100,   0x0000, 0x0000, 0x70E2);
+		AddColor(WHITE_100,  0x70E2, 0x70E2, 0x70E2);
+		AddColor(YELLOW_100, 0x70E2, 0x70E2, 0x0000);
+		AddColor(BLACK_0,    0x0000, 0x0000, 0x0000);  // 0 nits
+		AddColor(RED_100,    0x70E2, 0x0000, 0x0000);
+		AddColor(GRAY_15,    0x3BF1, 0x3BF1, 0x3BF1);  // ~1 nit
+		AddColor(BLACK_M2P,  0x0000, 0x0000, 0x0000);  // sub-zero maps to 0
+		AddColor(BLACK_P2P,  0x203F, 0x203F, 0x203F);  // ~0.008 nits
+		AddColor(BLACK_P4P,  0x28B2, 0x28B2, 0x28B2);  // ~0.037 nits
+		m_isvalid = true;
+	}
+	/** Get the FP16 component values (as uint16_t bit patterns) for a pixel of specified color
+		@param[in]  color   which color
+		@param[out] d       pointer to array for 3 uint16_t FP16 values
+		@param[in]  frac    for ramps, luminance fraction 0-1.0 (maps linearly to 0-10000 nits) */
+	void GetComponents(bar_colors_e color, uint16_t *d, float frac)
+	{
+		if (color == RAMP)
+		{
+			// Linear ramp from 0 to 10000 nits
+			float nits_val = frac * 10000.0f;
+			uint16_t fp16_val = floatToFP16Bits(nits_val);
+			d[0] = d[1] = d[2] = fp16_val;
+		}
+		else
+		{
+			d[0] = m_colors[static_cast<int>(color)][0];
+			d[1] = m_colors[static_cast<int>(color)][1];
+			d[2] = m_colors[static_cast<int>(color)][2];
+		}
+	}
+	bool m_isvalid;
+private:
+	/** Convert a float nit value to a uint16_t FP16 bit pattern */
+	static uint16_t floatToFP16Bits(float f)
+	{
+#ifdef __STDCPP_FLOAT_16_T__
+		std::float16_t h = static_cast<std::float16_t>(f);
+		uint16_t bits;
+		memcpy(&bits, &h, 2);
+		return bits;
+#else
+		// Portable IEEE 754 single->half conversion (round-to-nearest-even)
+		uint32_t f32;
+		memcpy(&f32, &f, 4);
+		uint32_t sign     = (f32 >> 31) & 0x1;
+		int32_t  exp      = ((f32 >> 23) & 0xFF) - 127 + 15;
+		uint32_t mantissa = (f32 & 0x7FFFFF);
+		if (exp <= 0)
+		{
+			// Underflow to zero or subnormal
+			if (exp < -10) return static_cast<uint16_t>(sign << 15);
+			mantissa = (mantissa | 0x800000) >> (1 - exp);
+			return static_cast<uint16_t>((sign << 15) | (mantissa >> 13));
+		}
+		else if (exp >= 31)
+		{
+			// Overflow to infinity
+			return static_cast<uint16_t>((sign << 15) | (0x1F << 10));
+		}
+		return static_cast<uint16_t>((sign << 15) | (exp << 10) | (mantissa >> 13));
+#endif
+	}
+	void AddColor(bar_colors_e c, uint16_t r, uint16_t g, uint16_t b)
+	{
+		m_colors[c][0] = r;
+		m_colors[c][1] = g;
+		m_colors[c][2] = b;
+	}
+	uint16_t m_colors[COLOR_MAX][3];
+};
+
 /** Tracks a list of non-overlapping rectangles, returns the color of the rectangle at a specific x,y value */
 class CBRectangleList
 {
@@ -870,7 +973,7 @@ int main(int argc, char *argv[])
 		std::cout << " -tf <BT709|HLG|PQ>";
 		std::cout << " -corder <corder>";
 		std::cout << " -usefr <1|0>";
-		std::cout << " -bpc <8|10|12>";
+		std::cout << " -bpc <8|10|12|fp16>";
 		std::cout << " -planar <1|0>";
 		std::cout << " -chroma <444|422|420>";
 		std::cout << " -w <width>";
@@ -903,7 +1006,13 @@ int main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-usefr"))
 			usefullrange = atoi(argv[++i]) == 1;
 		else if (!strcmp(argv[i], "-bpc"))
-			bpc = static_cast<uint8_t>(atoi(argv[++i]));
+		{
+			if (!strcmp(argv[i + 1], "fp16"))
+				bpc = 253;
+			else
+				bpc = static_cast<uint8_t>(atoi(argv[i + 1]));
+			i++;
+		}
 		else if (!strcmp(argv[i], "-planar"))
 			planar = atoi(argv[++i]) > 0;
 		else if (!strcmp(argv[i], "-chroma"))
@@ -946,7 +1055,13 @@ int main(int argc, char *argv[])
 	cout << "Packing:  " << static_cast<int>(packing) << endl;
 	cout << "RLE encoding:  " << static_cast<int>(rle_encoding) << endl;
 
-	alphaval = (1 << bpc) - 1;   // Always use max alpha
+	alphaval = (bpc == 253) ? 0x3C00 : ((1 << bpc) - 1);  // FP16 1.0 = 0x3C00; else max integer code
+
+	if (bpc == 253 && !fp16_support)
+	{
+		std::cerr << "FP16 output requires a C++23 compiler with std::float16_t support\n";
+		return 1;
+	}
 
 	if (chroma != 444 && chroma != 422 && chroma != 420)
 	{
@@ -958,10 +1073,31 @@ int main(int argc, char *argv[])
 	else
 		ctype = CT_YCBCR;
 
+	if (bpc == 253 && chroma != 444)
+	{
+		std::cerr << "FP16 only supports 4:4:4 chroma\n";
+		return 1;
+	}
+	if (bpc == 253 && ctype == CT_YCBCR)
+	{
+		std::cerr << "FP16 only supports RGB component order\n";
+		return 1;
+	}
+
 	ColorBarGenerator cbgen(width, height);
 
-	CBColor colormap(bpc, ctype, tftype, usefullrange);
-	if (!colormap.m_isvalid)
+	CBColorFP16 colormap_fp16;
+	CBColor colormap_int(bpc == 253 ? 10 : bpc, ctype, tftype, usefullrange);
+	if (bpc == 253)
+	{
+		colormap_fp16 = CBColorFP16(usefullrange);
+		if (!colormap_fp16.m_isvalid)
+		{
+			std::cerr << "Invalid FP16 color test configuration\n";
+			return 1;
+		}
+	}
+	else if (!colormap_int.m_isvalid)
 	{
 		std::cerr << "Invalid color test configuration\n";
 		return 1;
@@ -989,13 +1125,23 @@ int main(int argc, char *argv[])
 			ie->SetHeader(Dpx::eBitDepth, Dpx::eBitDepth10); // Bit depth needs to be set before low/high code values
 		else if (bpc == 12)
 			ie->SetHeader(Dpx::eBitDepth, Dpx::eBitDepth12); // Bit depth needs to be set before low/high code values
+		else if (bpc == 253)
+			ie->SetHeader(Dpx::eBitDepth, Dpx::eBitDepthR16); // Bit depth needs to be set before low/high code values
 		else
 		{
 			std::cerr << "Invalid bit depth\n";
 			return 1;
 		}
 
-		if (usefullrange)
+		if (bpc == 253)
+		{
+			// FP16: reference low/high as floating-point nit values
+			ie->SetHeader(Dpx::eReferenceLowDataCode, 0.0f);
+			ie->SetHeader(Dpx::eReferenceHighDataCode, 10000.0f);
+			ie->SetHeader(Dpx::eReferenceLowQuantity, 0.0f);
+			ie->SetHeader(Dpx::eReferenceHighQuantity, 10000.0f);
+		}
+		else if (usefullrange)
 		{
 			ie->SetHeader(Dpx::eReferenceLowDataCode, 0);
 			ie->SetHeader(Dpx::eReferenceHighDataCode, static_cast<float>((1 << bpc) - 1));
@@ -1011,7 +1157,13 @@ int main(int argc, char *argv[])
 		ie->SetHeader(Dpx::ePacking, packing);
 
 		// Metadata fields can be set at any point
-		if (tftype == TF_SDR)
+		if (bpc == 253)
+		{
+			// Linear light, BT.2020 primaries (consistent with the HDR nit values used)
+			ie->SetHeader(Dpx::eColorimetricSpecification, Dpx::eColorimetricBT_2020);
+			ie->SetHeader(Dpx::eTransferCharacteristic, Dpx::eTransferLinear);
+		}
+		else if (tftype == TF_SDR)
 		{
 			ie->SetHeader(Dpx::eColorimetricSpecification, Dpx::eColorimetricBT_709);
 			ie->SetHeader(Dpx::eTransferCharacteristic, Dpx::eTransferBT_709);
@@ -1054,7 +1206,41 @@ int main(int argc, char *argv[])
 	for (ie_idx = 0; ie_idx < iemap.GetNumberOfIEs(); ++ie_idx)
 	{
 		Dpx::HdrDpxImageElement *ie = dpxf.GetImageElement(ie_idx);
-		if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth1 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth8)
+		if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR16)
+		{
+			// FP16: samples stored as uint16_t holding IEEE 754 half-precision bit patterns
+			std::vector<uint16_t> datum_row;
+			IEDescriptor desc = iemap.GetDescriptor(ie_idx);
+			datum_row.resize(ie->GetRowSizeInDatums());
+			for (uint32_t row = 0; row < ie->GetHeight(); ++row)
+			{
+				uint32_t datum_idx = 0;
+				for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+				{
+					uint16_t fp16comps[3];
+					bar_colors_e color = cbgen.GetPixelColor(column, row);
+					colormap_fp16.GetComponents(color, fp16comps, cbgen.m_ramp_frac);
+					for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
+					{
+						if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
+							datum_row[datum_idx++] = static_cast<uint16_t>(alphaval);  // FP16 1.0
+						else if (dl == Dpx::DATUM_R)
+							datum_row[datum_idx++] = fp16comps[0];
+						else if (dl == Dpx::DATUM_G)
+							datum_row[datum_idx++] = fp16comps[1];
+						else if (dl == Dpx::DATUM_B)
+							datum_row[datum_idx++] = fp16comps[2];
+					}
+				}
+				if (datum_idx != (width * Dpx::DescriptorToDatumList(desc.descriptor).size()))
+				{
+					printf("Unexpected datum index\n");
+					getchar();
+				}
+				ie->App2DpxPixels(row, datum_row.data());
+			}
+		}
+		else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth1 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth8)
 		{
 			std::vector<uint8_t> datum_row;
 			IEDescriptor desc = iemap.GetDescriptor(ie_idx);
@@ -1066,7 +1252,7 @@ int main(int argc, char *argv[])
 				{
 					int32_t cbcomps[3];
 					bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
-					colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+					colormap_int.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
 					for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
 					{
 						if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
@@ -1087,7 +1273,7 @@ int main(int argc, char *argv[])
 						else if (dl == Dpx::DATUM_Y2)
 						{
 							color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
-							colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+							colormap_int.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
 							datum_row[datum_idx++] = cbcomps[0];
 						}
 					}
@@ -1100,7 +1286,7 @@ int main(int argc, char *argv[])
 				ie->App2DpxPixels(row, datum_row.data());
 			}
 		}
-		else  // 10, 12, or 16 bit
+		else  // 10, 12, or 16 bit integer
 		{
 			std::vector<uint16_t> datum_row;
 			IEDescriptor desc = iemap.GetDescriptor(ie_idx);
@@ -1112,7 +1298,7 @@ int main(int argc, char *argv[])
 				{
 					int32_t cbcomps[3];
 					bar_colors_e color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1), row * (desc.v_subs ? 2 : 1));
-					colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+					colormap_int.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
 					for (auto dl : Dpx::DescriptorToDatumList(desc.descriptor))
 					{
 						if (dl == Dpx::DATUM_A || dl == Dpx::DATUM_A2)
@@ -1133,7 +1319,7 @@ int main(int argc, char *argv[])
 						else if (dl == Dpx::DATUM_Y2)
 						{
 							color = cbgen.GetPixelColor(column * (desc.h_subs ? 2 : 1) + 1, row * (desc.v_subs ? 2 : 1));
-							colormap.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
+							colormap_int.GetComponents(color, cbcomps, cbgen.m_ramp_frac);
 							datum_row[datum_idx++] = cbcomps[0];
 						}
 					}

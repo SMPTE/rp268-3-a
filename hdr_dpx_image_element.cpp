@@ -696,7 +696,7 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 	int component;
 	int num_components;
 	uint32_t xpos;
-	uint32_t image_data_word;
+	uint32_t image_data_word = 0;
 	Fifo fifo(16);
 	int32_t int_datum = 0;
 	uint32_t row_wr_idx = 0;
@@ -713,7 +713,7 @@ void HdrDpxImageElement::ReadRow(uint32_t row)
 	int32_t run_length = 0;
 	int rle_count = 0;
 	uint16_t rle_pixel[8];
-	bool rle_is_same;
+	bool rle_is_same = false;
 	const bool is_signed = (m_dpx_ie_ptr->DataSign == 1);
 	const uint8_t bpc = BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize);
 
@@ -1233,7 +1233,7 @@ void HdrDpxImageElement::App2DpxPixels(uint32_t row, double *datum_ptr)
 		LOG_ERROR(eFileWriteError, eFatal, "File write error");
 		return;
 	}
-	if (m_dpx_ie_ptr->BitSize != 32)
+	if (m_dpx_ie_ptr->BitSize != 64)
 	{
 		LOG_ERROR(eBadParameter, eFatal, "Failed attempt writing double-precision pixels to file");
 		return;

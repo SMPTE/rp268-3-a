@@ -394,7 +394,7 @@ void write_raw_datum(int16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 	{
 #ifdef __STDCPP_FLOAT_16_T__
 		std::float16_t out;
-		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
 #else
 		std::cerr << "This fp32->fp16 sample code relies on the float16_t data type which is not available in your compiler\n";
@@ -438,8 +438,8 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 	{
 #ifdef __STDCPP_FLOAT_16_T__
 		float rowdata_float;
-		rowdata_float = *(reinterpret_cast<std::float16_t*>(&rowdata));
-		write_raw_datum(rowdata_fp, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma, raw_fp);
+		rowdata_float = static_cast<float>(*(reinterpret_cast<std::float16_t*>(&rowdata)));
+		write_raw_datum(rowdata_float, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma, raw_fp);
 		return;
 #else
 		std::cerr << "This fp16->fp32 sample code relies on the float16_t data type which is not available in your compiler\n";
@@ -465,7 +465,7 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 	{
 #ifdef __STDCPP_FLOAT_16_T__
 		std::float16_t out;
-		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
 #endif
 	}
@@ -518,7 +518,7 @@ void write_raw_datum(int8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_con
 	{
 #ifdef __STDCPP_FLOAT_16_T__
 		std::float16_t out;
-		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
 #endif
 	}
@@ -571,7 +571,7 @@ void write_raw_datum(uint8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 	{
 #ifdef __STDCPP_FLOAT_16_T__
 		std::float16_t out;
-		outrow = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
+		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
 #endif
 	}
