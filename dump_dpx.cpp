@@ -803,6 +803,22 @@ int main(int argc, char *argv[])
 						}
 					}
 				}
+				else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR16)  // 16-bit float
+				{
+					std::vector<uint16_t> rowdata;
+					rowdata.resize(ie->GetRowSizeInDatums());
+					ie->Dpx2AppPixels(row, static_cast<uint16_t*>(rowdata.data()));
+					for (uint32_t column = 0; column < ie->GetWidth(); ++column)
+					{
+						for (uint8_t c = 0; c < num_components; ++c)
+						{
+							if ((row & 1) && c == alt_chroma)
+								write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, true, raw_fp_list[num_components]);
+							else
+								write_raw_datum(rowdata[column * num_components + c], bit_depth_in, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma[c], raw_fp_list[c]);
+						}
+					}
+				}
 				else if (ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth16 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth12 || ie->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepth10)  // 2-byte int
 				{
 					if (ie->GetHeader(Dpx::eDataSign) == Dpx::eDataSignSigned)
