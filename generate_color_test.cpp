@@ -51,7 +51,7 @@
 
 #if __has_include(<stdfloat>)
 #include <stdfloat>
-#ifdef HDR_DPX_HAVE_FLOAT16
+#ifdef __STDCPP_FLOAT_16_T__
 #define HDR_DPX_HAVE_FLOAT16 1
 #elif defined(__FLT16_MAX__)
 #define HDR_DPX_HAVE_FLOAT16 1
