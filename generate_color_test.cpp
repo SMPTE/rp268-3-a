@@ -1083,6 +1083,11 @@ int main(int argc, char *argv[])
 		std::cerr << "FP16 only supports RGB component order\n";
 		return 1;
 	}
+	if (bpc == 253 && rle_encoding == Dpx::eEncodingRLE)
+	{
+		std::cerr << "FP16 does not support RLE encoding\n";
+		return 1;
+	}
 
 	ColorBarGenerator cbgen(width, height);
 

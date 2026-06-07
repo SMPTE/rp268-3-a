@@ -437,8 +437,9 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 	if (bit_depth_in == 253 && bit_depth_conv != 253)
 	{
 #ifdef __STDCPP_FLOAT_16_T__
-		float rowdata_float;
-		rowdata_float = static_cast<float>(*(reinterpret_cast<std::float16_t*>(&rowdata)));
+		std::float16_t h;
+		memcpy(&h, &rowdata, 2);
+		float rowdata_float = static_cast<float>(h);
 		write_raw_datum(rowdata_float, bit_depth_conv, hicode, lowcode, write_full_range, is_chroma, raw_fp);
 		return;
 #else
@@ -467,6 +468,9 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
+#else
+		std::cerr << "This int->fp16 sample code relies on the float16_t data type which is not available in your compiler\n";
+		exit(1);
 #endif
 	}
 	// Converts to integer (unsigned) format
@@ -520,6 +524,9 @@ void write_raw_datum(int8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_con
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
+#else
+		std::cerr << "This int8->fp16 sample code relies on the float16_t data type which is not available in your compiler\n";
+		exit(1);
 #endif
 	}
 	// Converts to integer (unsigned) format
@@ -573,6 +580,9 @@ void write_raw_datum(uint8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
+#else
+		std::cerr << "This int->fp16 sample code relies on the float16_t data type which is not available in your compiler\n";
+		exit(1);
 #endif
 	}
 	// Converts to integer (unsigned) format
@@ -693,6 +703,11 @@ int main(int argc, char *argv[])
 		else if (!arg.compare("-bit_depth_conv"))
 		{
 			bit_depth_conv = static_cast<uint8_t>(atoi(argv[++i]));
+			if (bit_depth_conv == 253 && !fp16_conv_support)
+			{
+				std::cerr << "FP16 output (-bit_depth_conv 253) requires a C++23 compiler with std::float16_t support\n";
+				return -1;
+			}
 		}
 		else if (!arg.compare("-dump_full_range"))
 		{

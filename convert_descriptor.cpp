@@ -195,6 +195,15 @@ int main(int argc, char *argv[])
 		dump_error_log("Validation errors:\n", f_in);
 	}
 
+	for (auto ie_idx : f_in.GetIEIndexList())
+	{
+		if (f_in.GetImageElement(ie_idx)->GetHeader(Dpx::eBitDepth) == Dpx::eBitDepthR16)
+		{
+			std::cerr << "convert_descriptor does not support FP16 image elements\n";
+			return 1;
+		}
+	}
+
 	std::cout << f_in;  // Dump header
 
 	bool ud_present = f_in.GetUserData(userid, userdata);
@@ -296,7 +305,7 @@ int main(int argc, char *argv[])
 
 		ie_out = f_out.GetImageElement(out_ie_idx);
 		datum_row_out.resize(dl_dest.size() * f_in.GetHeader(Dpx::ePixelsPerLine));
-		maxval = (1 << static_cast<uint8_t>(ie_out->GetHeader(Dpx::eBitDepth))) - 1;
+		maxval = (1 << BITSIZE_ENUM_TO_BITS(static_cast<uint8_t>(ie_out->GetHeader(Dpx::eBitDepth)))) - 1;
 
 		for(uint32_t row = 0; row < f_in.GetHeader(Dpx::eLinesPerImageElement); ++row)
 		{

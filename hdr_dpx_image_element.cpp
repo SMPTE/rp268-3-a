@@ -520,7 +520,7 @@ uint32_t HdrDpxImageElement::GetRowSizeInBytes(bool include_padding) const
 		idw_per_line = static_cast<uint32_t>(num_c * m_width);
 	else if (BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) == 16)
 		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width / 2.0));
-	else if (m_dpx_ie_ptr->Packing == 0 || m_dpx_ie_ptr->BitSize == 8)
+	else if (m_dpx_ie_ptr->Packing == 0 || BITSIZE_ENUM_TO_BITS(m_dpx_ie_ptr->BitSize) == 8)
 		idw_per_line = static_cast<uint32_t>(std::ceil(num_c * m_width * m_dpx_ie_ptr->BitSize / 8.0 / 4.0));
 	else
 	{
