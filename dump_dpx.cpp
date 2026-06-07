@@ -44,8 +44,16 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
-#ifdef __STDCPP_FLOAT_16_T__
+#if __has_include(<stdfloat>)
 #include <stdfloat>
+#ifdef HDR_DPX_HAVE_FLOAT16
+#define HDR_DPX_HAVE_FLOAT16 1
+#elif defined(__FLT16_MAX__)
+#define HDR_DPX_HAVE_FLOAT16 1
+namespace std { using float16_t = _Float16; }
+#endif
+#endif
+#ifdef HDR_DPX_HAVE_FLOAT16
 const bool fp16_conv_support = true;
 #else
 const bool fp16_conv_support = false;
@@ -283,7 +291,7 @@ void write_raw_datum(float rowdata, uint8_t bit_depth_conv, float hicode, float 
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = rowdata;
 		raw_fp->write((char*)&out, 2);
@@ -336,7 +344,7 @@ void write_raw_datum(double rowdata, uint8_t bit_depth_conv, float hicode, float
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = rowdata;
 		raw_fp->write((char*)&out, 2);
@@ -392,7 +400,7 @@ void write_raw_datum(int16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
@@ -436,7 +444,7 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 	
 	if (bit_depth_in == 253 && bit_depth_conv != 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t h;
 		memcpy(&h, &rowdata, 2);
 		float rowdata_float = static_cast<float>(h);
@@ -464,7 +472,7 @@ void write_raw_datum(uint16_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_c
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
@@ -520,7 +528,7 @@ void write_raw_datum(int8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_con
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
@@ -576,7 +584,7 @@ void write_raw_datum(uint8_t rowdata, uint8_t bit_depth_in, uint8_t bit_depth_co
 	}
 	else if (bit_depth_conv == 253)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t out;
 		out = static_cast<std::float16_t>(int_to_norm_double(rowdata, is_chroma, lowcode, bit_depth_in));
 		raw_fp->write((char*)&out, 2);
@@ -703,11 +711,6 @@ int main(int argc, char *argv[])
 		else if (!arg.compare("-bit_depth_conv"))
 		{
 			bit_depth_conv = static_cast<uint8_t>(atoi(argv[++i]));
-			if (bit_depth_conv == 253 && !fp16_conv_support)
-			{
-				std::cerr << "FP16 output (-bit_depth_conv 253) requires a C++23 compiler with std::float16_t support\n";
-				return -1;
-			}
 		}
 		else if (!arg.compare("-dump_full_range"))
 		{

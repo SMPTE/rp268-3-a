@@ -49,8 +49,16 @@
 #include <cstring>
 #include <cmath>
 
-#ifdef __STDCPP_FLOAT_16_T__
+#if __has_include(<stdfloat>)
 #include <stdfloat>
+#ifdef HDR_DPX_HAVE_FLOAT16
+#define HDR_DPX_HAVE_FLOAT16 1
+#elif defined(__FLT16_MAX__)
+#define HDR_DPX_HAVE_FLOAT16 1
+namespace std { using float16_t = _Float16; }
+#endif
+#endif
+#ifdef HDR_DPX_HAVE_FLOAT16
 const bool fp16_support = true;
 #else
 const bool fp16_support = false;
@@ -546,7 +554,7 @@ private:
 	/** Convert a float nit value to a uint16_t FP16 bit pattern */
 	static uint16_t floatToFP16Bits(float f)
 	{
-#ifdef __STDCPP_FLOAT_16_T__
+#ifdef HDR_DPX_HAVE_FLOAT16
 		std::float16_t h = static_cast<std::float16_t>(f);
 		uint16_t bits;
 		memcpy(&bits, &h, 2);
@@ -1056,12 +1064,6 @@ int main(int argc, char *argv[])
 	cout << "RLE encoding:  " << static_cast<int>(rle_encoding) << endl;
 
 	alphaval = (bpc == 253) ? 0x3C00 : ((1 << bpc) - 1);  // FP16 1.0 = 0x3C00; else max integer code
-
-	if (bpc == 253 && !fp16_support)
-	{
-		std::cerr << "FP16 output requires a C++23 compiler with std::float16_t support\n";
-		return 1;
-	}
 
 	if (chroma != 444 && chroma != 422 && chroma != 420)
 	{
