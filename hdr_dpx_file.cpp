@@ -286,7 +286,6 @@ void HdrDpxFile::ByteSwapHeader(void)
 		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset));
 		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].Packing));
 		ByteSwap16(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].Encoding));
-		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].DataOffset));
 		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfLinePadding));
 		ByteSwap32(&(m_dpx_header.ImageHeader.ImageElement[ie_idx].EndOfImagePadding));
 	}
